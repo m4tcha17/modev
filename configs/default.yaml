@@ -1,0 +1,45 @@
+# Default pipeline configuration.
+# Values marked "(ADR-00N)" are defaults pending confirmation — see docs/decisions/.
+
+data:
+  image_root: "data/raw"       # configurable root; delivery format not yet finalized (ADR-004)
+  csv_path: "data/raw/export.csv"
+
+preprocessing:
+  masking_method: "otsu"        # swappable: otsu | adaptive | hsv | grabcut (§4 fallback list)
+
+features:
+  glcm:
+    distances: [1, 2, 3]        # pixels (ADR-006)
+    angles_deg: [0, 45, 90, 135]
+    average_across_distances: false
+  color_spaces: ["hsv", "lab"]
+  canny:
+    low_threshold: 100
+    high_threshold: 200
+
+cleaning:
+  outlier_method: "iqr"         # iqr | zscore (ADR-001)
+  iqr_multiplier: 1.5
+  zscore_threshold: 3.0
+
+splitting:
+  n_splits: 5
+  group_column: "Sample_ID"
+
+augmentation:
+  class_multipliers:            # (ADR-002) illustrative starting point, not final
+    "1": 3
+    "2": 1
+    "3": 3
+  geometric_only: true
+
+tuning:
+  n_trials: 75                  # per model (ADR-003)
+  objective_metric: "f1_macro"
+
+evaluation:
+  boundary_tolerance_pct: 0.5   # percentage points around 6.0/6.1 and 13.9/14.0 (ADR-007)
+
+artifact:
+  serialization: "native"       # joblib for sklearn-compatible, native save for xgboost/lightgbm (ADR-005)
