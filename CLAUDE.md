@@ -24,6 +24,10 @@ Two distinct stages, kept separate in code:
 
 The combined-all-angle model from step 1 is never the deployed artifact — it exists only to pick the algorithm. Step 2's retrain is mandatory before anything is called "the deployed model."
 
+## Git
+
+**Never `git commit`.** Stage changes if useful, but leave committing to the user — commits in this repo are done manually, always.
+
 ## Everything else
 
 Feature families, tuning targets, evaluation requirements, serialization format, and the 7 open/unconfirmed parameters live in `docs/architecture.md` and `docs/decisions/`. Consult those, and `model-development-instructions.md` itself, before making a design call not covered above.
