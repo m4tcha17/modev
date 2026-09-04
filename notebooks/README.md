@@ -8,4 +8,4 @@ Planned notebooks (create as real `.ipynb` files when the implementing session s
 - `02_masking_check.ipynb` — visual check of Otsu masks (`preprocessing/otsu.py`) across sample lighting conditions; where the fallback-method decision (§4) would get made if Otsu proves unreliable.
 - `03_feature_sanity.ipynb` — spot-check extracted GLCM/HSV-LAB/Canny feature values against physical expectations (e.g. do drier samples show higher edge density).
 - `04_ablation.ipynb` — run and visualize `evaluation/ablation.py` output (feature-family accuracy progression) and `evaluation/viz.py` (PCA/t-SNE separability check).
-- `05_shap.ipynb` — run and visualize `explainability/treeshap.py` aggregate-by-family output; per-feature plausibility check per §10.
+- `05c_shap.ipynb` — run and visualize `explainability/treeshap.py` aggregate-by-family output; per-feature plausibility check per §10.
