@@ -45,7 +45,7 @@ docs/                      # architecture doc + ADRs for unresolved spec paramet
 1. **Input** — a CSV export (`Sample_ID`, `Angle_ID`, `timestamp`, `moisture_reading`) plus six angle images per physical sample, referenced via a configurable image root (`configs/default.yaml: data.image_root`).
 2. **Masking** — Otsu thresholding isolates copra pixels from background per image.
 3. **Feature extraction** — GLCM texture + HSV/LAB color + Canny edge density, concatenated per angle image.
-4. **Cleaning** — duplicate `Sample_ID` resolution, then outlier flagging on extracted features (IQR default).
+4. **Cleaning** — duplicate `Sample_ID` resolution, then outlier flagging on extracted features (advisory only; nothing is dropped). Outlier detection defaults to IQR with a 1.5x multiplier and flags a row only when >=3 features are out of bounds (`cleaning.outlier_min_features`). Method, multiplier, and threshold are ADR-001 defaults the thesis team has not yet confirmed against real feature distributions.
 5. **Split → augment** — GroupKFold by `Sample_ID` first, then geometric-only augmentation with per-class multipliers (never the reverse — see `CLAUDE.md`).
 6. **Training + tuning** — Logistic Regression baseline plus Random Forest, XGBoost, LightGBM, all class-weighted, tuned with Optuna for Macro F1.
 7. **Algorithm selection** — best-scoring ensemble on the combined all-angle feature set is selected; Logistic Regression never deploys.
