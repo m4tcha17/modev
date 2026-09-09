@@ -1,5 +1,5 @@
-"""Algorithm selection (M-BM-'8c step 1) vs. deployment configuration (M-BM-'9) - two
-distinct stages, never conflated. See ../../../CLAUDE.md.
+"""Algorithm selection (§8c step 1) vs. deployment configuration (§9) - two
+distinct stages, never conflated. See ../../CLAUDE.md.
 """
 
 import pandas as pd

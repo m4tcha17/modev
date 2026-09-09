@@ -1,4 +1,4 @@
-"""GroupKFold splitting by Sample_ID. Spec M-BM-'7a. Must run before augmentation - see ../../../CLAUDE.md."""
+"""GroupKFold splitting by Sample_ID. Spec §7a. Must run before augmentation - see ../../CLAUDE.md."""
 
 import pandas as pd
 from sklearn.model_selection import GroupKFold

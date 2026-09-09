@@ -1,7 +1,7 @@
-"""Class-weighted geometric augmentation. Spec M-BM-'7b. Multiplier: see ADR-002.
+"""Class-weighted geometric augmentation. Spec §7b. Multiplier: see ADR-002.
 
 Geometric only (rotation, flip). No photometric augmentation, no SMOTE - see
-../../../CLAUDE.md.
+../../CLAUDE.md.
 """
 
 import numpy as np

@@ -1,4 +1,4 @@
-"""TreeSHAP explainability. Spec M-BM-'10."""
+"""TreeSHAP explainability. Spec §10."""
 
 import pandas as pd
 
