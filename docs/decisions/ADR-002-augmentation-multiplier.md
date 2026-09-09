@@ -11,7 +11,7 @@ Geometric transforms only: rotations and flips. No photometric augmentation, no 
 
 ## Rationale
 
-Real collected class counts aren't known yet at scaffold time, so exact multipliers can't be fixed. The dict interface (`augmentation/geometric.py`) lets the future session plug in real per-class counts and compute multipliers once the dataset export exists, without changing the augmentation code itself.
+Real collected class counts aren't known yet at scaffold time, so exact multipliers can't be fixed. The dict interface (`augmentation.py`) lets the future session plug in real per-class counts and compute multipliers once the dataset export exists, without changing the augmentation code itself.
 
 ## What would change it
 

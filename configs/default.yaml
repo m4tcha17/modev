@@ -22,6 +22,7 @@ cleaning:
   outlier_method: "iqr"         # iqr | zscore (ADR-001)
   iqr_multiplier: 1.5
   zscore_threshold: 3.0
+  outlier_min_features: 3       # row flagged only if >= N features are out of bounds
 
 splitting:
   n_splits: 5

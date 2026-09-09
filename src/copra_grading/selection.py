@@ -1,16 +1,22 @@
-"""Deployment configuration: angle-wise retrain of the selected algorithm only. Spec §9.
-
-Retrains ONLY the algorithm selection.py picked - never all four again - on
-each of: top-only, each side individually, all-sides-combined, bottom-only,
-and combined-all-angle (kept purely as the upper-bound comparison point).
-Whichever single-angle (or smallest angle-subset) configuration reaches
-acceptable accuracy becomes the deployed model's required input - a live user
-should submit as few photos as possible, ideally one.
-
-This result is a hard input to artifact/serialize.py, not just a reported metric.
+"""Algorithm selection (§8c step 1) vs. deployment configuration (§9) - two
+distinct stages, never conflated. See ../../CLAUDE.md.
 """
 
 import pandas as pd
+
+# --- algorithm_selection ---
+
+
+def select_algorithm(
+    X_combined: pd.DataFrame, y: pd.Series, groups: pd.Series
+) -> str:
+    """Train/tune all four models on the combined all-angle feature set,
+    return the name of the best-scoring ensemble ("random_forest" | "xgboost" | "lightgbm").
+    """
+    raise NotImplementedError
+
+
+# --- deployment_config ---
 
 
 def evaluate_angle_configs(

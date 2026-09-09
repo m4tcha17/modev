@@ -1,10 +1,12 @@
-"""Rotation/flip augmentation with per-class multipliers. Spec §7b.
+"""Class-weighted geometric augmentation. Spec §7b. Multiplier: see ADR-002.
 
-Must run only on training-fold data, after splitting (see splitting/groupkfold.py)
-- never before, and never applied to validation/test folds.
+Geometric only (rotation, flip). No photometric augmentation, no SMOTE - see
+../../CLAUDE.md.
 """
 
 import numpy as np
+
+# --- geometric ---
 
 
 def augment_sample(
