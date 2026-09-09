@@ -31,7 +31,7 @@ Note: TreeSHAP (J) runs against the combined all-angle version of the *selected*
 | `features/color.py` | §5b | HSV + LAB per-channel statistics |
 | `features/edges.py` | §5c | Canny edge/contour density |
 | `features/combine.py` | §5 | Concatenate the three families into one per-angle-image feature row |
-| `cleaning.py` | §6 | Duplicate `Sample_ID` resolution (§6.1) + feature-level outlier flagging (§6.2, ADR-001) |
+| `cleaning.py` | §6 | Duplicate `Sample_ID` **detection** (§6.1) — conflicts reported (a `DedupReport`) for manual resolution; rows are never dropped or edited — plus feature-level outlier flagging (§6.2, ADR-001), also advisory-only |
 | `splitting.py` | §7a | GroupKFold by `Sample_ID`, runs before augmentation |
 | `augmentation.py` | §7b | Rotation/flip only, per-class multiplier (see ADR-002) |
 | `models/{logreg,random_forest,xgboost_model,lightgbm_model}.py` | §8a | Four candidate models, all natively class-weighted |

@@ -152,8 +152,8 @@ dropped**; downstream decides what to do with the flags.
 Algorithm (both methods):
 
 1. Select numeric feature columns only. Explicitly exclude identifier /
-   metadata columns: `Sample_ID`, `Angle_ID`, `moisture_reading`, and any
-   non-numeric dtype.
+   metadata columns: `Sample_ID`, `Angle_ID`, `timestamp`, `moisture_reading`,
+   and any non-numeric dtype.
 2. Per column, compute bounds:
    - IQR: `[Q1 - multiplier*IQR, Q3 + multiplier*IQR]`
    - Z-score: `|(x - mean) / std| > threshold`
@@ -256,7 +256,7 @@ before any Part 2 logic is written — imports updated, nothing else changed.
 - `min_flagged_features` respected: a row with 2 wild features is not flagged at default 3, is flagged at 2
 - returned Series index matches input index exactly
 - IQR and Z-score paths both run and both flag the obvious outlier
-- identifier columns (`Sample_ID`, `Angle_ID`, `moisture_reading`) never contribute
+- identifier columns (`Sample_ID`, `Angle_ID`, `timestamp`, `moisture_reading`) never contribute
 - zero-variance column present → no crash, no spurious flags
 - `flag_outliers` dispatch picks the method named in config
 
