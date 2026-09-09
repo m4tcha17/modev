@@ -7,7 +7,7 @@
 
 **IQR method**, standard multiplier: flag values below `Q1 - 1.5×IQR` or above `Q3 + 1.5×IQR`.
 
-Implemented alongside Z-score (`|z| > 3`) as a configurable alternative behind one interface (`cleaning/outliers.py`) — not a fixed decision.
+Implemented alongside Z-score (`|z| > 3`) as a configurable alternative behind one interface (`cleaning.py`) — not a fixed decision.
 
 ## Rationale
 

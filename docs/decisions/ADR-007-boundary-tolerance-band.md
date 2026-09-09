@@ -5,7 +5,7 @@
 
 ## Default
 
-**±0.5 percentage points** around each threshold (6.0%/6.1% and 13.9%/14.0%). "Near-boundary" = moisture reading within 0.5pp of either threshold; everything else is "mid-range." Both buckets get separate metrics in evaluation (`evaluation/boundary_analysis.py`).
+**±0.5 percentage points** around each threshold (6.0%/6.1% and 13.9%/14.0%). "Near-boundary" = moisture reading within 0.5pp of either threshold; everything else is "mid-range." Both buckets get separate metrics in evaluation (`evaluation.py`).
 
 ## Rationale
 

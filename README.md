@@ -24,14 +24,14 @@ src/copra_grading/
 ├── labels.py            # class-label derivation (implemented)
 ├── preprocessing/        # Otsu background masking
 ├── features/              # GLCM texture, HSV/LAB color, Canny edges
-├── cleaning/               # duplicate resolution, outlier detection
-├── splitting/               # GroupKFold by Sample_ID (before augmentation)
-├── augmentation/             # geometric-only, class-weighted
+├── cleaning.py             # duplicate resolution, outlier detection
+├── splitting.py             # GroupKFold by Sample_ID (before augmentation)
+├── augmentation.py           # geometric-only, class-weighted
 ├── models/                    # Logistic Regression baseline, RF/XGBoost/LightGBM + Optuna tuning
-├── selection/                   # algorithm selection vs. deployment-angle configuration
-├── explainability/                # TreeSHAP, aggregated by feature family
-├── evaluation/                     # metrics, boundary analysis, human baseline, ablation
-└── artifact/                        # model + config serialization
+├── selection.py                 # algorithm selection vs. deployment-angle configuration
+├── explainability.py              # TreeSHAP, aggregated by feature family
+├── evaluation.py                   # metrics, boundary analysis, human baseline, ablation
+└── artifact.py                      # model + config serialization
 
 configs/default.yaml   # all tunable parameters in one place
 notebooks/              # exploration only — no pipeline logic
@@ -56,10 +56,10 @@ docs/                      # architecture doc + ADRs for unresolved spec paramet
 
 ## How the trained model will be used (once implemented)
 
-Once `artifact/serialize.py` produces a real artifact, downstream usage is:
+Once `artifact.py` produces a real artifact, downstream usage is:
 
 ```python
-from copra_grading.artifact.serialize import load_artifact
+from copra_grading.artifact import load_artifact
 
 model, config = load_artifact("path/to/artifact")
 
@@ -67,7 +67,7 @@ model, config = load_artifact("path/to/artifact")
 # 1. mask it with the same Otsu params in `config`
 # 2. extract features with `features/combine.py`, using `config`'s feature ordering
 # 3. model.predict(...) -> "1" | "2" | "3"
-# 4. optional: explainability.treeshap.explain_single_prediction(model, features) for a live SHAP explanation
+# 4. optional: explainability.explain_single_prediction(model, features) for a live SHAP explanation
 ```
 
 This is exactly what the separate Streamlit deployment interface (out of scope for this repo) will call — one submitted photo in, one class out, no price adjustment computed anywhere in this system.

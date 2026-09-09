@@ -1,12 +1,13 @@
-"""Serialize the deployment model + preprocessing/feature-extraction config. Spec §12.
+"""Final deployable artifact serialization. Spec M-BM-'12. Format: see ADR-005.
 
-Config bundled alongside the model must include: Otsu masking parameters, the
-GLCM angle/distance set (ADR-006), exact feature ordering, and the chosen
-deployment angle config (from selection/deployment_config.py) - everything a
-separate Streamlit app needs to reproduce identical inference-time preprocessing.
+Bundles the angle-retrained deployment model (selection/deployment_config.py's
+output) with its exact preprocessing/feature-extraction config - never the
+combined all-angle model from selection/algorithm_selection.py.
 """
 
 from pathlib import Path
+
+# --- serialize ---
 
 
 def save_artifact(model, feature_config: dict, deployment_angle_config: str, out_dir: Path) -> Path:

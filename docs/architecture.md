@@ -31,21 +31,20 @@ Note: TreeSHAP (J) runs against the combined all-angle version of the *selected*
 | `features/color.py` | §5b | HSV + LAB per-channel statistics |
 | `features/edges.py` | §5c | Canny edge/contour density |
 | `features/combine.py` | §5 | Concatenate the three families into one per-angle-image feature row |
-| `cleaning/dedup.py` | §6.1 | Resolve duplicate `Sample_ID` at merge/export time |
-| `cleaning/outliers.py` | §6.2 | Z-score / IQR outlier flagging on extracted features (configurable, see ADR-001) |
-| `splitting/groupkfold.py` | §7a | GroupKFold by `Sample_ID`, runs before augmentation |
-| `augmentation/geometric.py` | §7b | Rotation/flip only, per-class multiplier (see ADR-002) |
+| `cleaning.py` | §6 | Duplicate `Sample_ID` resolution (§6.1) + feature-level outlier flagging (§6.2, ADR-001) |
+| `splitting.py` | §7a | GroupKFold by `Sample_ID`, runs before augmentation |
+| `augmentation.py` | §7b | Rotation/flip only, per-class multiplier (see ADR-002) |
 | `models/{logreg,random_forest,xgboost_model,lightgbm_model}.py` | §8a | Four candidate models, all natively class-weighted |
 | `models/tuning.py` | §8b | Optuna, optimizing Macro F1 (see ADR-003 for search space/budget) |
-| `selection/algorithm_selection.py` | §8c step 1 | Combined all-angle training of all four; pick best ensemble by tuned Macro F1 |
-| `selection/deployment_config.py` | §9 | Retrain *only* the selected algorithm across single-angle/angle-subset configs; determine minimal deployment input |
-| `explainability/treeshap.py` | §10 | TreeSHAP on selected algorithm's combined all-angle version; aggregate by feature family; expose a callable for live per-image SHAP at deployment time |
-| `evaluation/metrics.py` | §11 | Confusion matrix, accuracy, F1, per-class precision/recall, Macro F1 |
-| `evaluation/boundary_analysis.py` | §11 | Near-boundary vs. mid-range bucketed metrics (see ADR-007 for tolerance band) |
-| `evaluation/human_baseline.py` | §11 | Accepts human-labeled comparison file/column; compares model vs. manual pasa-method accuracy |
-| `evaluation/ablation.py` | §11 | Color-only / texture-only / edge-only / combined accuracy progression |
-| `evaluation/viz.py` | §11 | PCA / t-SNE sanity-check visualization of combined feature space |
-| `artifact/serialize.py` | §12 | Bundle deployment model + preprocessing/feature-extraction config (Otsu params, GLCM angle/distance set, feature ordering) into one loadable artifact (see ADR-005) |
+| `selection.py` | §8c step 1 | Combined all-angle training of all four; pick best ensemble by tuned Macro F1 |
+| `selection.py` | §9 | Retrain *only* the selected algorithm across single-angle/angle-subset configs; determine minimal deployment input |
+| `explainability.py` | §10 | TreeSHAP on selected algorithm's combined all-angle version; aggregate by feature family; expose a callable for live per-image SHAP at deployment time |
+| `evaluation.py` | §11 | Confusion matrix, accuracy, F1, per-class precision/recall, Macro F1 |
+| `evaluation.py` | §11 | Near-boundary vs. mid-range bucketed metrics (see ADR-007 for tolerance band) |
+| `evaluation.py` | §11 | Accepts human-labeled comparison file/column; compares model vs. manual pasa-method accuracy |
+| `evaluation.py` | §11 | Color-only / texture-only / edge-only / combined accuracy progression |
+| `evaluation.py` | §11 | PCA / t-SNE sanity-check visualization of combined feature space |
+| `artifact.py` | §12 | Bundle deployment model + preprocessing/feature-extraction config (Otsu params, GLCM angle/distance set, feature ordering) into one loadable artifact (see ADR-005) |
 
 ## Data flow
 
