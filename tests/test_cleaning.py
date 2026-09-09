@@ -7,6 +7,9 @@ from copra_grading.cleaning import (
     DuplicateSampleError,
     SampleConflict,
     assert_clean,
+    flag_outliers,
+    flag_outliers_iqr,
+    flag_outliers_zscore,
     resolve_duplicate_samples,
 )
 
@@ -105,13 +108,6 @@ def test_assert_clean_returns_none_on_clean_frame():
     assert assert_clean(df) is None
 
 
-from copra_grading.cleaning import (
-    flag_outliers,
-    flag_outliers_iqr,
-    flag_outliers_zscore,
-)
-
-
 def _feature_frame(n_rows=40, n_feats=10, seed=0):
     # Fixture tightened (controller pre-authorized): explicit bounded, evenly
     # spaced values so NO row is a natural IQR/Z-score outlier. This keeps the
@@ -178,6 +174,20 @@ def test_identifier_columns_never_contribute():
 def test_zero_variance_feature_column_does_not_crash_or_flag():
     df = _feature_frame()
     df["feat_const"] = 7.0
+
+    flags = flag_outliers_iqr(df, min_flagged_features=1)
+
+    assert flags.sum() == 0
+
+
+def test_iqr_ignores_degenerate_column_with_mostly_identical_values():
+    # Non-constant column where Q1 == Q3 == 0 -> IQR == 0. The 1.5x multiplier
+    # is inert, so without a zero-IQR guard every nonzero value reads as an
+    # outlier (spec §6.2 step 2: a zero-variance column contributes no flags).
+    df = _feature_frame()
+    col = np.zeros(len(df))
+    col[[1, 2]] = 1e-9  # 38 zeros + 2 tiny nonzero -> Q1==Q3==0, not constant
+    df["feat_degenerate"] = col
 
     flags = flag_outliers_iqr(df, min_flagged_features=1)
 

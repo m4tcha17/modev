@@ -80,7 +80,9 @@ def resolve_duplicate_samples(df: pd.DataFrame) -> DedupReport:
                 )
             )
 
-        distinct_moisture = sorted(group["moisture_reading"].dropna().unique())
+        distinct_moisture = sorted(
+            float(v) for v in group["moisture_reading"].dropna().unique()
+        )
         if len(distinct_moisture) > 1:
             conflicts.append(
                 SampleConflict(
@@ -104,7 +106,7 @@ def assert_clean(df: pd.DataFrame) -> None:
 # --- §6.2 Feature-level outlier detection (ADR-001) --------------------------
 
 
-_IDENTIFIER_COLUMNS = ("Sample_ID", "Angle_ID", "moisture_reading")
+_IDENTIFIER_COLUMNS = ("Sample_ID", "Angle_ID", "timestamp", "moisture_reading")
 
 
 def _numeric_features(features: pd.DataFrame) -> pd.DataFrame:
@@ -133,6 +135,11 @@ def flag_outliers_iqr(
     lower = q1 - multiplier * iqr
     upper = q3 + multiplier * iqr
     out_of_bounds = numeric.lt(lower, axis=1) | numeric.gt(upper, axis=1)
+    # Zero-variance columns (Q1 == Q3, IQR == 0) contribute no flags - the
+    # multiplier is inert and every value != Q1 would count as out-of-bounds
+    # (spec §6.2 step 2). If every column is degenerate, out_of_bounds has 0
+    # columns and _row_flags still returns an all-False Series.
+    out_of_bounds = out_of_bounds.loc[:, iqr > 0]
     return _row_flags(out_of_bounds, min_flagged_features, features.index)
 
 
