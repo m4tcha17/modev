@@ -3,7 +3,7 @@
 
 data:
   # copra-dataset.csv + photos/ in the same directory; `path` column resolves against it
-  csv_path: "dataset/copra-dataset-export-2026-10-04T02-07-19-787Z/copra-dataset.csv"
+  csv_path: "dataset/copra_dataset/copra-dataset.csv"
 
 preprocessing:
   # background_grabcut | otsu. Otsu fails on the real photos (grey background
