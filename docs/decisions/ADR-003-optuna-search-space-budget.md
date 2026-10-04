@@ -1,7 +1,7 @@
 # ADR-003: Optuna Search Space and Trial Budget
 
 **Status:** proposed-default, pending thesis-team confirmation
-**Spec reference:** §8b, §15 item 3
+**Spec reference:** `process.md` Step 5
 
 ## Default
 
@@ -16,7 +16,9 @@ Search spaces (starting points, `models/tuning.py`):
 | XGBoost | `n_estimators` (100-500), `max_depth` (3-10), `learning_rate` (log-uniform, 1e-3 to 3e-1), `min_child_weight` (1-10), `subsample`/`colsample_bytree` (0.5-1.0), `reg_alpha`/`reg_lambda` (log-uniform, 1e-3 to 10) |
 | LightGBM | `n_estimators` (100-500), `num_leaves` (7-127), `learning_rate` (log-uniform, 1e-3 to 3e-1), `min_child_samples` (5-50), `subsample`/`colsample_bytree` (0.5-1.0), `reg_alpha`/`reg_lambda` (log-uniform, 1e-3 to 10) |
 
-Objective: Macro F1 (see `../../CLAUDE.md` and instructions §8b — never raw accuracy).
+Objective: Macro F1, never raw accuracy. `process.md` requires regularization tuning: `max_depth` + `min_samples_leaf` (RF), `max_depth` + `min_child_weight` (XGBoost, LightGBM) — LightGBM's `min_child_weight` should join or replace `min_child_samples` above, and LightGBM needs an explicit `max_depth` range (e.g. 3-12) alongside `num_leaves`.
+
+Tuning CV must group by `batch_id`, same as the evaluation split.
 
 ## Rationale
 

@@ -1,4 +1,4 @@
-"""LightGBM ensemble candidate. Spec §8a. No feature scaling needed (tree-based)."""
+"""LightGBM ensemble candidate. process.md Step 5. No feature scaling needed (tree-based)."""
 
 from lightgbm import LGBMClassifier
 

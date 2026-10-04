@@ -1,4 +1,4 @@
-"""XGBoost ensemble candidate. Spec §8a. No feature scaling needed (tree-based)."""
+"""XGBoost ensemble candidate. process.md Step 5. No feature scaling needed (tree-based)."""
 
 from xgboost import XGBClassifier
 

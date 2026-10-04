@@ -1,1 +1,1 @@
-"""Copra moisture-based grade classification pipeline. See docs/architecture.md."""
+"""Copra classification pipeline (classes A-F). See process.md and docs/architecture.md."""

@@ -1,21 +1,19 @@
 # ADR-002: Per-Class Augmentation Multiplier
 
 **Status:** proposed-default, pending thesis-team confirmation
-**Spec reference:** §7b, §15 item 2
+**Spec reference:** `process.md` Step 4c
 
-## Default
+## Fixed by process.md
 
-Configurable dict, e.g. `{1: 3, 2: 1, 3: 3}` (illustrative starting point — real multipliers depend on actual collected class counts). Rule for picking the starting values: choose multipliers that roughly balance *effective* post-augmentation class counts, given natural skew toward Class 2 (§3).
+Training folds only, after the StratifiedGroupKFold split. Rotations and flips only — no brightness, contrast, or color changes, no SMOTE. Smaller classes get more augmented copies than larger ones. Augmented images go through masking + feature extraction like originals.
 
-Geometric transforms only: rotations and flips. No photometric augmentation, no SMOTE (see `../../CLAUDE.md`).
+## Default (open part)
 
-## Rationale
-
-Real collected class counts aren't known yet at scaffold time, so exact multipliers can't be fixed. The dict interface (`augmentation/geometric.py`) lets the future session plug in real per-class counts and compute multipliers once the dataset export exists, without changing the augmentation code itself.
+Multipliers computed per training fold from class counts (`augmentation.class_multipliers`): the largest class gets the fewest copies, smaller classes proportionally more, capped at `augmentation.max_multiplier` (default **4**) to limit near-duplicates of the smallest class.
 
 ## What would change it
 
-Once real per-class sample counts are known, compute multipliers that bring Class 1 and Class 3 effective counts close to Class 2's, while checking augmented-copy volume doesn't produce excessive near-duplicates for the smallest class.
+Real per-class counts across A–F. The 2026-10-04 export is all class `A`, so the cap can't be tuned yet.
 
 ## Owner
 

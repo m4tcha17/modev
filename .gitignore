@@ -18,6 +18,7 @@ data/external/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/external/.gitkeep
+dataset
 
 # Model artifacts
 /models/

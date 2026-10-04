@@ -1,29 +1,28 @@
-# Copra Moisture-Based Grade Classification — Project Rules
+# Copra Classification — Project Rules
 
-Full build spec: `model-development-instructions.md`. Architecture detail: `docs/architecture.md`. Unresolved parameters: `docs/decisions/` (ADR-001..007). This file holds only the hard, stable constraints — read the other two for everything else.
+Build spec: `process.md`. Architecture detail: `docs/architecture.md`. Open parameters: `docs/decisions/`. This file holds only the hard, stable constraints — read the other two for everything else.
 
 ## Non-negotiable constraints
 
-- **Classification only.** Never build a price/discount regression head or output. The three classes are `1`, `2`, `3` (or `class_1`/`class_2`/`class_3`) — never a commercial grade name (no "Resecada", "Bodega", "Corriente", etc.) anywhere in code, labels, configs, or generated output.
+- **Classification only.** Six classes, `A`–`F`, read directly from the `copra_class` CSV column. Each stands for a moisture band (F < 6% < A < 9 < B < 12 < C < 15 < D < 18% ≤ E; see `docs/classes.md`) — letters are not in moisture order. Never derive labels from anything else, never build a price/discount regression head or output.
 - **No end-to-end CNN / deep-learning image model.** Handcrafted features (GLCM + HSV/LAB + Canny) feeding tree ensembles is the deliberate architecture, not a placeholder for one.
 - **No meta-ensemble/stacking** across Random Forest, XGBoost, LightGBM. They are compared against each other and against a Logistic Regression baseline — never blended into one model.
-- **No SMOTE or synthetic interpolation** for class balance. Class balance correction is class weighting (model-level, all four models) + real geometric augmentation (data-level) only.
-- **No photometric augmentation** (brightness/contrast/color/hue shifts), ever — it corrupts the HSV/LAB color signal the pipeline measures. Augmentation is geometric only (rotation, flip).
-- **No external "wet/dried" dataset merged in** without an explicit, separately-agreed labeling protocol. Default assumption: field-collected data only.
+- **No SMOTE or synthetic interpolation** for class balance. Class balance correction is class weighting (model-level, all four models) + geometric augmentation (data-level) only.
+- **No photometric augmentation** (brightness/contrast/color/hue shifts), ever — it corrupts the HSV/LAB color features. Augmentation is geometric only (rotation, flip), training folds only.
+- **Outliers are dropped, never imputed, thresholds never relaxed.** A feature value is an outlier if |z| > 3 or outside the 1.5×IQR fence; any photo row with one is dropped. If too much data is lost, collect more data.
 
 ## Hard ordering constraint
 
-**Split before augment, never the reverse.** GroupKFold (grouped by `Sample_ID`) must run before any augmented copies are generated, so every augmented variant of a sample's images stays in the same fold as the original. Splitting after augmentation, or without grouping by `Sample_ID`, leaks near-duplicate samples across folds and silently inflates validation/test scores.
+**Split before augment, never the reverse.** StratifiedGroupKFold (5 folds, stratified by `copra_class`) must run before any augmented copies are generated. Group by the **whole copra sample**: every photo of it — across all its batches — and every augmented variant stays in the same fold. Several `batch_id`s can come from one whole sample, so grouping by `batch_id` alone can leak; set `splitting.group_column` to a whole-sample ID once the CSV has one. Splitting after augmentation, or with the wrong grouping, puts part of a sample in training and part in testing and silently inflates scores.
 
-## Algorithm selection vs. deployment configuration — never conflate
+## Selection and deployment
 
-Two distinct stages, kept separate in code:
+All four models are compared on Macro F1 across the 5 folds. The best of Random Forest / XGBoost / LightGBM is the selected model and is what gets deployed. Logistic Regression is a reference point only, never deployed. Deployment is a Streamlit app: one photo in, one class (A–F) out, optional per-photo SHAP grouped by feature type.
 
-1. **Algorithm selection**: all four models (LR baseline + 3 ensembles) trained/tuned on the **combined all-angle** feature set. Best-scoring ensemble (by tuned Macro F1) is the selected algorithm. LR is baseline reference only, never deployable.
-2. **Deployment configuration**: only the *selected* algorithm is retrained on single-angle / angle-subset feature sets to find the minimal photo input a live user submits.
+## Git
 
-The combined-all-angle model from step 1 is never the deployed artifact — it exists only to pick the algorithm. Step 2's retrain is mandatory before anything is called "the deployed model."
+**Never `git commit`.** Stage changes if useful, but leave committing to the user — commits in this repo are done manually, always.
 
 ## Everything else
 
-Feature families, tuning targets, evaluation requirements, serialization format, and the 7 open/unconfirmed parameters live in `docs/architecture.md` and `docs/decisions/`. Consult those, and `model-development-instructions.md` itself, before making a design call not covered above.
+Feature families, tuning targets, evaluation metrics, serialization format, and open parameters live in `docs/architecture.md` and `docs/decisions/`. Consult those, and `process.md` itself, before making a design call not covered above.

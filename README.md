@@ -1,12 +1,22 @@
-# Copra Moisture-Based Grade Classification
+# Copra Classification
 
-Image-based quality grading pipeline for copra (dried coconut meat). Classifies a copra sample into one of three PCA AO 02 moisture brackets — **Class 1** (≤6.0% MC, premium), **Class 2** (6.1–13.9% MC, graduated deductions), **Class 3** (≥14.0% MC, rejected) — from handcrafted image features (texture, color, edge density) and a tuned tree-ensemble model. Classification only; no price prediction.
+Image-based copra (dried coconut meat) classifier. Each photo is assigned one of six moisture-content classes, **A–F** (F below 6%, A 6–9%, B 9–12%, C 12–15%, D 15–18%, E 18%+; see [`docs/classes.md`](docs/classes.md)), from handcrafted image features (texture, color, edges) and a tuned tree-ensemble model.
 
-Full build spec: [`model-development-instructions.md`](model-development-instructions.md). Hard constraints: [`CLAUDE.md`](CLAUDE.md). Design detail: [`docs/architecture.md`](docs/architecture.md). Unresolved parameters: [`docs/decisions/`](docs/decisions/).
+Build spec: [`process.md`](process.md). Hard constraints: [`CLAUDE.md`](CLAUDE.md). Design detail: [`docs/architecture.md`](docs/architecture.md). Open parameters: [`docs/decisions/`](docs/decisions/).
 
 ## Status
 
-**Scaffold stage — no trained model yet.** `src/copra_grading/` contains the full module structure with documented interfaces; most functions currently `raise NotImplementedError`. The one real implementation is `labels.py` (class-label derivation from moisture reading), which is tested. Everything else — masking, feature extraction, cleaning, splitting, augmentation, training, selection, explainability, evaluation, serialization — is pending implementation against a real or synthetic dataset.
+**No trained model yet.** Implemented and tested: data loading + batch checks (`dataset.py`), background masking (background model + GrabCut; Otsu failed on real photos) + resize, GLCM / HSV-LAB / Canny feature extraction measured inside the copra only, whole-dataset feature table, outlier removal, StratifiedGroupKFold split. Still `NotImplementedError`: augmentation, models + tuning, selection, evaluation, explainability, artifact, Streamlit app, synthetic data generator.
+
+Current export (`dataset/copra_dataset/`, from the 2026-10-04 08:10 export): 376 photos in 94 batches — 200 class `A`, 176 class `B`. A two-class (A vs B) model can be built from it; classes C–F still need collecting.
+
+## Extract features
+
+```bash
+uv run python scripts/extract_features.py   # -> data/processed/features.csv + mask_preview.jpg
+```
+
+Check `mask_preview.jpg` by eye after every new export: red outline = detected copra.
 
 ## Setup
 
@@ -21,63 +31,47 @@ uv run pytest
 
 ```
 src/copra_grading/
-├── labels.py            # class-label derivation (implemented)
-├── preprocessing/        # Otsu background masking
-├── features/              # GLCM texture, HSV/LAB color, Canny edges
-├── cleaning/               # duplicate resolution, outlier detection
-├── splitting/               # GroupKFold by Sample_ID (before augmentation)
-├── augmentation/             # geometric-only, class-weighted
-├── models/                    # Logistic Regression baseline, RF/XGBoost/LightGBM + Optuna tuning
-├── selection/                   # algorithm selection vs. deployment-angle configuration
-├── explainability/                # TreeSHAP, aggregated by feature family
-├── evaluation/                     # metrics, boundary analysis, human baseline, ablation
-└── artifact/                        # model + config serialization
+├── dataset.py         # Step 1: load CSV + photos, batch checks
+├── preprocessing/     # Step 2: Otsu masking, resize
+├── features/          # Step 3: GLCM texture, HSV/LAB color, Canny edges
+├── cleaning.py        # Step 4a: drop outlier rows
+├── splitting.py       # Step 4b: StratifiedGroupKFold (before augmentation)
+├── augmentation.py    # Step 4c: rotate/flip, training folds only
+├── models/            # Step 5: LR baseline, RF/XGBoost/LightGBM + Optuna
+├── selection.py       # Step 6: best ensemble on Macro F1
+├── evaluation.py      # Step 7: metrics
+├── explainability.py  # Step 8: TreeSHAP by feature group
+└── artifact.py        # Step 9: model + config serialization
 
+app/streamlit_app.py   # Step 9: one photo in, one class out
 configs/default.yaml   # all tunable parameters in one place
-notebooks/              # exploration only — no pipeline logic
-scripts/                 # synthetic dataset generator (for dev before real data lands)
-tests/                    # mirrors src/ layout
-docs/                      # architecture doc + ADRs for unresolved spec parameters
+notebooks/             # exploration only, no pipeline logic
+scripts/               # synthetic dataset generator
+tests/                 # mirrors src/ layout
+docs/                  # architecture doc + ADRs
 ```
 
-## Pipeline, end to end
+## Dataset layout
 
-1. **Input** — a CSV export (`Sample_ID`, `Angle_ID`, `timestamp`, `moisture_reading`) plus six angle images per physical sample, referenced via a configurable image root (`configs/default.yaml: data.image_root`).
-2. **Masking** — Otsu thresholding isolates copra pixels from background per image.
-3. **Feature extraction** — GLCM texture + HSV/LAB color + Canny edge density, concatenated per angle image.
-4. **Cleaning** — duplicate `Sample_ID` resolution, then outlier flagging on extracted features (IQR default).
-5. **Split → augment** — GroupKFold by `Sample_ID` first, then geometric-only augmentation with per-class multipliers (never the reverse — see `CLAUDE.md`).
-6. **Training + tuning** — Logistic Regression baseline plus Random Forest, XGBoost, LightGBM, all class-weighted, tuned with Optuna for Macro F1.
-7. **Algorithm selection** — best-scoring ensemble on the combined all-angle feature set is selected; Logistic Regression never deploys.
-8. **Deployment configuration** — the selected algorithm is retrained on single-angle / angle-subset feature sets to find the minimal photo input a live user needs to submit.
-9. **Explainability** — TreeSHAP on the selected algorithm's combined all-angle version, aggregated by feature family.
-10. **Evaluation** — confusion matrix, per-class precision/recall (Class 1 precision and Class 3 recall emphasized), Macro F1, boundary-region vs. mid-range breakdown, human-baseline comparison, feature-family ablation.
-11. **Artifact** — the angle-retrained deployment model plus its exact preprocessing/feature config is serialized. This is the only artifact handed off downstream — never the combined all-angle model from step 7.
-
-## How the trained model will be used (once implemented)
-
-Once `artifact/serialize.py` produces a real artifact, downstream usage is:
-
-```python
-from copra_grading.artifact.serialize import load_artifact
-
-model, config = load_artifact("path/to/artifact")
-
-# For a single submitted photo:
-# 1. mask it with the same Otsu params in `config`
-# 2. extract features with `features/combine.py`, using `config`'s feature ordering
-# 3. model.predict(...) -> "1" | "2" | "3"
-# 4. optional: explainability.treeshap.explain_single_prediction(model, features) for a live SHAP explanation
+```
+copra-dataset.csv      # id, batch_id, copra_class, path
+photos/<id>.jpg
 ```
 
-This is exactly what the separate Streamlit deployment interface (out of scope for this repo) will call — one submitted photo in, one class out, no price adjustment computed anywhere in this system.
+One row per photo. Each physical sample is photographed from 4 sides; those 4 rows share a `batch_id` and a `copra_class`. Same phone, 10 cm distance, same settings, mid-grey background.
 
-## Developing against synthetic data
+## Pipeline
 
-If real field data isn't available yet:
+1. **Load** — CSV + photos, keep `batch_id` on every row.
+2. **Preprocess** — background-model + GrabCut mask → apply mask → resize. (`process.md` names Otsu; it fails on the real photos, see ADR-008.)
+3. **Features** — GLCM texture + HSV/LAB color + Canny edges, one row per photo.
+4. **Prepare** — drop rows with any outlier value (|z| > 3 or outside 1.5×IQR, never imputed or relaxed); StratifiedGroupKFold(5), stratified by class and grouped by whole copra sample (several batches can share one sample); then rotate/flip augmentation on training folds only, more copies for smaller classes.
+5. **Train** — Logistic Regression (standardized, baseline only), Random Forest, XGBoost, LightGBM; all class-weighted; Optuna on Macro F1.
+6. **Select** — best of RF / XGBoost / LightGBM by Macro F1 across the 5 folds.
+7. **Evaluate** — confusion matrix, accuracy, Macro F1, per-class precision/recall, per photo on held-out folds.
+8. **Explain** — TreeSHAP summed by feature group (texture / color / edge).
+9. **Deploy** — selected model in a Streamlit app: upload one photo, get a class A–F, optional per-photo SHAP.
 
 ```bash
-uv run python scripts/make_synthetic_dataset.py --n-samples 200 --out-dir data/raw
+uv run streamlit run app/streamlit_app.py   # once implemented
 ```
-
-Generates a schema-matching placeholder dataset so the pipeline can be built and tested end-to-end before real data lands.
