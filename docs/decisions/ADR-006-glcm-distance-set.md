@@ -18,3 +18,7 @@ If TreeSHAP (Step 8) shows negligible marginal contribution from farther distanc
 ## Owner
 
 Thesis team; can be empirically revisited once TreeSHAP results are available.
+
+## Fix (2026-10-04): diagonal distances
+
+scikit-image places the neighbour at `(round(d·sin θ), round(d·cos θ))`, so on the 45° and 135° diagonals d=1 and d=2 both became a 1-pixel diagonal step, giving 8 identical feature pairs. `glcm.py` now passes `d·√2` for diagonals, so distance d means d pixel steps along every direction ((0, d), (d, d), (d, 0), (d, −d)). All 62 GLCM/color/edge features are now distinct.

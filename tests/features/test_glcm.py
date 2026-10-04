@@ -78,3 +78,27 @@ def test_foreground_keeps_real_texture():
     feats = extract_glcm_features(image, distances=[1], angles_deg=[0], foreground=fg)
 
     assert feats["glcm_d1_a0_contrast"] == pytest.approx(100.0**2)
+
+
+def test_diagonal_distances_give_distinct_features():
+    # scikit-image's own rounding makes d=1 and d=2 identical on diagonals.
+    rng = np.random.default_rng(0)
+    gray = rng.integers(0, 256, (40, 40)).astype(np.uint8)
+
+    feats = extract_glcm_features(gray, distances=[1, 2, 3], angles_deg=[45, 135])
+
+    for a in (45, 135):
+        values = [feats[f"glcm_d{d}_a{a}_contrast"] for d in (1, 2, 3)]
+        assert len(set(values)) == 3
+
+
+def test_diagonal_distance_is_d_steps_each_way():
+    # Stripes repeating every 2 pixels along both axes: a (2, 2) step lands
+    # on the same value (contrast 0), a (1, 1) step doesn't.
+    yy, xx = np.mgrid[0:20, 0:20]
+    gray = np.where((yy + xx) % 4 < 2, 50, 200).astype(np.uint8)
+
+    feats = extract_glcm_features(gray, distances=[1, 2], angles_deg=[45])
+
+    assert feats["glcm_d2_a45_contrast"] == 0.0
+    assert feats["glcm_d1_a45_contrast"] > 0.0
