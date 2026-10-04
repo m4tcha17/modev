@@ -1,7 +1,7 @@
-"""Logistic Regression - baseline only, never eligible for deployment. Spec §8a.
+"""Logistic Regression - baseline only, never eligible for deployment. process.md Step 5.
 
 Requires standardized feature scaling (only model in this pipeline that does -
-see ../../../CLAUDE.md / instructions §7c).
+see ../../../CLAUDE.md).
 """
 
 import pandas as pd

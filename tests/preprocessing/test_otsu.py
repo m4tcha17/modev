@@ -70,3 +70,26 @@ def test_apply_mask_uint8_mask_matches_bool_mask():
     result_from_uint8 = apply_mask(image, uint8_mask)
 
     np.testing.assert_array_equal(result_from_bool, result_from_uint8)
+
+
+def test_resize_masked_hits_target_size_and_keeps_background_zero():
+    from copra_grading.preprocessing.otsu import resize_masked
+
+    img = np.zeros((30, 40, 3), dtype=np.uint8)
+    img[10:20, 10:30] = 180
+
+    out = resize_masked(img, (64, 64))
+
+    assert out.shape == (64, 64, 3)
+    # nearest-neighbour: only original values survive, no blended edge pixels
+    assert set(np.unique(out)) <= {0, 180}
+
+
+def test_apply_mask_keeps_pure_black_copra_pixels_nonzero():
+    image = np.zeros((10, 10, 3), dtype=np.uint8)
+    mask = np.zeros((10, 10), dtype=bool)
+    mask[2:8, 2:8] = True  # copra region is pure black
+
+    out = apply_mask(image, mask)
+
+    assert np.all(np.any(out != 0, axis=-1))

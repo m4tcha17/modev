@@ -1,9 +1,9 @@
-"""HSV/LAB color-space features. Spec §5b.
+"""HSV/LAB color-space features. process.md Step 3b.
 
-Physical rationale: moisture loss shifts copra from pale/white toward
-tan/brown. HSV separates hue/saturation from brightness (less confounded by
-uncontrolled ambient lighting than raw RGB); LAB is perceptually uniform and
-matches the gray-to-brown drying shift.
+Classes are moisture bands (docs/classes.md), and moisture shows up in
+color: copra shifts from pale/white toward tan/brown as it dries.
+HSV separates hue/saturation from brightness; LAB is perceptually uniform.
+Only copra pixels count - the zeroed background is ignored.
 
 Never apply photometric augmentation anywhere in this pipeline - it corrupts
 this signal directly (see ../../../CLAUDE.md).

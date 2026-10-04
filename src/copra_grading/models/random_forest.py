@@ -1,4 +1,4 @@
-"""Random Forest ensemble candidate. Spec §8a. No feature scaling needed (tree-based)."""
+"""Random Forest ensemble candidate. process.md Step 5. No feature scaling needed (tree-based)."""
 
 from sklearn.ensemble import RandomForestClassifier
 

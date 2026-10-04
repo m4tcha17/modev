@@ -52,3 +52,29 @@ def test_raises_value_error_on_non_uint8_input():
 
     with pytest.raises(ValueError):
         extract_glcm_features(gray, distances=[1], angles_deg=[0])
+
+
+def test_foreground_excludes_outline_from_texture():
+    # Flat copra on zeroed background: no surface texture at all. Only the
+    # outline cliff can create contrast.
+    image = np.zeros((32, 32), dtype=np.uint8)
+    image[8:24, 8:24] = 150
+    fg = image > 0
+
+    with_outline = extract_glcm_features(image, distances=[1], angles_deg=[0])
+    interior_only = extract_glcm_features(image, distances=[1], angles_deg=[0], foreground=fg)
+
+    assert with_outline["glcm_d1_a0_contrast"] > 0
+    assert interior_only["glcm_d1_a0_contrast"] == 0.0
+    assert interior_only["glcm_d1_a0_energy"] == 1.0
+
+
+def test_foreground_keeps_real_texture():
+    image = np.zeros((32, 32), dtype=np.uint8)
+    image[8:24, 8:24] = 100
+    image[8:24, 8:24:2] = 200  # stripes inside the copra
+    fg = image > 0
+
+    feats = extract_glcm_features(image, distances=[1], angles_deg=[0], foreground=fg)
+
+    assert feats["glcm_d1_a0_contrast"] == pytest.approx(100.0**2)

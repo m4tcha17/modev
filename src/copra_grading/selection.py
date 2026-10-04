@@ -1,36 +1,26 @@
-"""Algorithm selection (§8c step 1) vs. deployment configuration (§9) - two
-distinct stages, never conflated. See ../../CLAUDE.md.
+"""Model selection. process.md Step 6.
+
+Compare all four models on Macro F1 across the 5 StratifiedGroupKFold folds. The best
+of Random Forest / XGBoost / LightGBM is the selected (deployed) model.
+Logistic Regression is a reference point only, never selectable.
 """
 
 import pandas as pd
 
-# --- algorithm_selection ---
+ENSEMBLE_CANDIDATES = ("random_forest", "xgboost", "lightgbm")
+
+# --- selection ---
 
 
-def select_algorithm(
-    X_combined: pd.DataFrame, y: pd.Series, groups: pd.Series
-) -> str:
-    """Train/tune all four models on the combined all-angle feature set,
-    return the name of the best-scoring ensemble ("random_forest" | "xgboost" | "lightgbm").
+def cross_validate_models(
+    X: pd.DataFrame, y: pd.Series, folds: list, tuned_params: dict[str, dict]
+) -> dict[str, list[float]]:
+    """Train each model (LR + 3 ensembles) on every fold's training split
+    (augmented), score on the held-out split. Return per-fold Macro F1 per model.
     """
     raise NotImplementedError
 
 
-# --- deployment_config ---
-
-
-def evaluate_angle_configs(
-    selected_algorithm: str,
-    features_by_angle: dict[str, pd.DataFrame],
-    y: pd.Series,
-    groups: pd.Series,
-) -> dict[str, float]:
-    """Retrain selected_algorithm on each angle config, return Macro F1 per config."""
-    raise NotImplementedError
-
-
-def choose_deployment_config(angle_scores: dict[str, float], min_acceptable_f1: float) -> str:
-    """Pick the smallest angle config meeting min_acceptable_f1; fall back toward
-    larger combinations only if no single angle suffices - never default to all six.
-    """
+def select_model(fold_scores: dict[str, list[float]]) -> str:
+    """Return the ensemble in ENSEMBLE_CANDIDATES with the highest mean Macro F1."""
     raise NotImplementedError

@@ -1,8 +1,8 @@
-"""Final deployable artifact serialization. Spec §12. Format: see ADR-005.
+"""Deployable artifact serialization. process.md Step 9. Format: see ADR-005.
 
-Bundles the angle-retrained deployment model (selection.py's deployment-config
-output) with its exact preprocessing/feature-extraction config - never the
-combined all-angle model from selection.py's algorithm-selection stage.
+Bundles the selected model (selection.py) with its exact preprocessing/
+feature-extraction config so the Streamlit app reproduces Steps 2-3 on one
+uploaded photo identically.
 """
 
 from pathlib import Path
@@ -10,7 +10,7 @@ from pathlib import Path
 # --- serialize ---
 
 
-def save_artifact(model, feature_config: dict, deployment_angle_config: str, out_dir: Path) -> Path:
+def save_artifact(model, feature_config: dict, out_dir: Path) -> Path:
     """Serialize model (joblib for sklearn-compatible, native save for XGBoost/LightGBM
     - see ADR-005) plus feature_config to out_dir. Return the artifact path.
     """
