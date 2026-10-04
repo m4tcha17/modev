@@ -3,19 +3,19 @@
 
 data:
   # copra-dataset.csv + photos/ in the same directory; `path` column resolves against it
-  csv_path: "dataset/copra_dataset/copra-dataset.csv"
+  csv_path: "data/raw/copra-dataset.csv"
 
 preprocessing:
   # background_grabcut | otsu. Otsu fails on the real photos (grey background
   # sits between white meat and brown skin) - see preprocessing/background.py.
   masking_method: "background_grabcut"
-  background_threshold_k: 4.0   # copra seed = > k robust SDs from the fitted background
+  background_threshold_k: 4.0 # copra seed = > k robust SDs from the fitted background
   grabcut_iters: 3
-  resize_to: [512, 512]         # (width, height) after masking
+  resize_to: [512, 512] # (width, height) after masking
 
 features:
   glcm:
-    distances: [1, 2, 3]        # pixels (ADR-006)
+    distances: [1, 2, 3] # pixels (ADR-006)
     angles_deg: [0, 45, 90, 135]
     average_across_distances: false
   color_spaces: ["hsv", "lab"]
@@ -24,7 +24,7 @@ features:
     high_threshold: 200
   # Measure GLCM/Canny inside the copra only, not across its outline.
   exclude_boundary: true
-  boundary_margin_px: 3         # Canny edges this close to the outline are ignored
+  boundary_margin_px: 3 # Canny edges this close to the outline are ignored
 
 cleaning:
   # A value is an outlier if |z| > zscore_threshold OR outside the IQR fence.
@@ -38,7 +38,7 @@ splitting:
   # Must identify the whole copra sample. Several batch_ids can share one
   # whole sample - switch to a whole-sample ID column once the CSV has one.
   group_column: "batch_id"
-  label_column: "copra_class"   # stratify so each fold's A-F mix matches the dataset
+  label_column: "copra_class" # stratify so each fold's A-F mix matches the dataset
   random_state: 42
 
 augmentation:
@@ -48,8 +48,8 @@ augmentation:
   geometric_only: true
 
 tuning:
-  n_trials: 75                  # per model (ADR-003)
+  n_trials: 75 # per model (ADR-003)
   objective_metric: "f1_macro"
 
 artifact:
-  serialization: "native"       # joblib for sklearn-compatible, native save for xgboost/lightgbm (ADR-005)
+  serialization: "native" # joblib for sklearn-compatible, native save for xgboost/lightgbm (ADR-005)
