@@ -19,6 +19,12 @@ def extract_glcm_features(
     Each distance/angle pair is kept as a separate feature (not averaged) per
     ADR-006's documented default.
 
+    Distance d means d pixel steps along the direction: (0, d) at 0 deg,
+    (d, d) diagonally at 45/135 deg. scikit-image instead rounds
+    d*sin/d*cos, so its d=1 and d=2 both land on a 1-pixel diagonal step
+    and give identical features; diagonal distances are therefore passed
+    as d*sqrt(2), which rounds to exactly d steps each way.
+
     `foreground` (bool, same shape) restricts the GLCM to copra-copra pixel
     pairs. Without it, the zeroed background and the cliff at the copra
     outline count as texture: contrast is inflated and partly measures the
@@ -47,9 +53,10 @@ def extract_glcm_features(
     for d in distances:
         for a_deg in angles_deg:
             angle_rad = np.deg2rad(a_deg)
+            step = d if a_deg % 90 == 0 else d * np.sqrt(2)
             counts = graycomatrix(
                 gray,
-                distances=[d],
+                distances=[step],
                 angles=[angle_rad],
                 levels=256,
                 symmetric=True,
