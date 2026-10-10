@@ -27,13 +27,14 @@ flowchart TD
 | `preprocessing/otsu.py` | 2 | Otsu mask (comparison only — fails on real photos), apply mask (crop + zero background), resize |
 | `preprocessing/pipeline.py` | 2 | `preprocess(image, config)`: pick mask method, apply, resize |
 | `features/glcm.py` | 3a | Contrast, homogeneity, energy, entropy at 0/45/90/135° and configured distances |
-| `features/color.py` | 3b | HSV + LAB per-channel mean/std over copra pixels only |
+| `features/color.py` | 3b | HSV + LAB per-channel mean/std over copra pixels only; hue uses circular mean/std, no percentiles (ADR-009) |
 | `features/edges.py` | 3c | Canny edge density + contour stats |
 | `features/combine.py` | 3 | Concatenate into one feature row per photo; GLCM/Canny measured inside the copra only (`features.exclude_boundary`) |
 | `features/table.py` | 1–3 | Whole dataset → feature table (`id`, `batch_id`, `copra_class`, `mask_fraction`, features); run via `scripts/extract_features.py` |
-| `cleaning.py` | 4a | Flag outlier values (z OR IQR), drop every row holding one |
-| `splitting.py` | 4b | StratifiedGroupKFold(5), stratified by `copra_class`, grouped by `splitting.group_column` (whole sample; `batch_id` until a whole-sample ID exists), before augmentation |
+| `cleaning.py` | 4a | Flag outlier values (z OR IQR), drop every row holding one; `remove_outlier_photos` judges original rows only and drops a flagged photo with all its transforms |
+| `splitting.py` | 4b | StratifiedGroupKFold(5), stratified by `copra_class`, grouped by `splitting.group_column` (whole sample = `batch_id`, ADR-010), before augmentation |
 | `augmentation.py` | 4c | Rotation/flip only, more copies for smaller classes (ADR-002) |
+| `folds.py` | 4b–4c | `make_folds`: split originals, then per fold pick augmented training copies (multipliers from that fold's class counts); val = originals only. `scripts/prepare_folds.py` runs 4a–4c |
 | `models/*.py` | 5 | LR (standardized, baseline) + RF/XGBoost/LightGBM (unscaled), all class-weighted |
 | `models/tuning.py` | 5 | Optuna on Macro F1, same grouped + stratified folds (ADR-003) |
 | `selection.py` | 6 | Per-fold Macro F1 for all four, pick best ensemble |

@@ -67,6 +67,8 @@ def main() -> None:
     start = time.time()
     transforms = (ORIGINAL,) if args.no_augment else TRANSFORMS
     table = build_feature_table(df, csv_path, config, transforms=transforms, n_jobs=args.n_jobs)
+    for skip in table.attrs["skipped"]:
+        print(f"skipped photo {skip['id']} ({skip['augment']}): {skip['reason']}")
     table_path = args.out / "features.csv"
     table.to_csv(table_path, index=False)
     print(f"{len(feature_columns(table))} features x {len(table)} rows "

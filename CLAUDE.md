@@ -13,7 +13,7 @@ Build spec: `process.md`. Architecture detail: `docs/architecture.md`. Open para
 
 ## Hard ordering constraint
 
-**Split before augment, never the reverse.** StratifiedGroupKFold (5 folds, stratified by `copra_class`) must run before any augmented copies are generated. Group by the **whole copra sample**: every photo of it — across all its batches — and every augmented variant stays in the same fold. Several `batch_id`s can come from one whole sample, so grouping by `batch_id` alone can leak; set `splitting.group_column` to a whole-sample ID once the CSV has one. Splitting after augmentation, or with the wrong grouping, puts part of a sample in training and part in testing and silently inflates scores.
+**Split before augment, never the reverse.** StratifiedGroupKFold (5 folds, stratified by `copra_class`) must run before any augmented copies are generated. Group by the **whole copra sample**: every photo of it and every augmented variant stays in the same fold. One `batch_id` is one whole sample (its 4 side photos), so `splitting.group_column` is `batch_id` (ADR-010). If a sample ever spans several `batch_id`s, add a whole-sample ID column and group by that instead. Splitting after augmentation, or with the wrong grouping, puts part of a sample in training and part in testing and silently inflates scores.
 
 ## Selection and deployment
 

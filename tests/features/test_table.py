@@ -5,6 +5,7 @@ import pytest
 
 from copra_grading.augmentation import ORIGINAL, TRANSFORMS
 from copra_grading.dataset import load_dataset
+from copra_grading.features import EmptyRegionError, table as table_module
 from copra_grading.features.table import (
     META_COLUMNS,
     build_feature_table,
@@ -79,3 +80,40 @@ def test_rotation_swaps_glcm_directions(tmp_path):
 
     assert r90["glcm_d1_a90_contrast"] == pytest.approx(r0["glcm_d1_a0_contrast"], rel=0.05)
     assert r90["glcm_d1_a0_contrast"] == pytest.approx(r0["glcm_d1_a90_contrast"], rel=0.05)
+
+
+def test_photo_with_no_copra_region_is_dropped_whole_and_reported(tmp_path, monkeypatch):
+    csv = _write_dataset(tmp_path, n_batches=1)
+    df = load_dataset(csv)
+    real_extract = table_module.extract_all_features
+    calls = {"n": 0}
+
+    def flaky_extract(masked, config):
+        # Fail on the 2nd photo's 3rd transform: every transform of that
+        # photo must go, not just the failing one.
+        calls["n"] += 1
+        if calls["n"] == len(TRANSFORMS) + 3:
+            raise EmptyRegionError("empty foreground mask: no copra pixels found")
+        return real_extract(masked, config)
+
+    monkeypatch.setattr(table_module, "extract_all_features", flaky_extract)
+    with pytest.warns(UserWarning, match="1 of 4 photos dropped"):
+        table = build_feature_table(df, csv, CONFIG, n_jobs=1)
+
+    bad_id = df["id"].iloc[1]
+    assert bad_id not in set(table["id"])
+    assert len(table) == (len(df) - 1) * len(TRANSFORMS)
+    assert [s["id"] for s in table.attrs["skipped"]] == [bad_id]
+
+
+def test_other_value_errors_still_propagate(tmp_path, monkeypatch):
+    # Only "no copra" is skippable; a bad dtype or config is a real bug.
+    csv = _write_dataset(tmp_path, n_batches=1)
+    df = load_dataset(csv)
+
+    def broken_extract(masked, config):
+        raise ValueError("expected uint8 image, got float32")
+
+    monkeypatch.setattr(table_module, "extract_all_features", broken_extract)
+    with pytest.raises(ValueError, match="expected uint8"):
+        build_feature_table(df, csv, CONFIG, n_jobs=1)

@@ -11,6 +11,8 @@ import cv2
 import numpy as np
 from skimage.feature import graycomatrix, graycoprops
 
+from copra_grading.features import EmptyRegionError
+
 
 def _region(
     gray: np.ndarray, foreground: np.ndarray, boundary_margin_px: int
@@ -22,7 +24,7 @@ def _region(
         )
     region = foreground.astype(bool)
     if not region.any():
-        raise ValueError("empty foreground mask: no copra pixels found")
+        raise EmptyRegionError("empty foreground mask: no copra pixels found")
 
     if boundary_margin_px > 0:
         k = 2 * boundary_margin_px + 1
@@ -131,7 +133,7 @@ def extract_glcm_features(
                 counts = counts[1:, 1:]
             total = counts.sum()
             if total <= 0:
-                raise ValueError(
+                raise EmptyRegionError(
                     f"no valid pixel pairs at distance {d}, angle {a_deg}: "
                     "copra region too small or distance too large"
                 )
