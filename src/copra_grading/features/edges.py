@@ -16,13 +16,16 @@ Notes
 import cv2
 import numpy as np
 
+from copra_grading.features import EmptyRegionError
+
 
 def _region(
     masked_image: np.ndarray,
     foreground: np.ndarray | None,
     boundary_margin_px: int,
 ) -> np.ndarray:
-    """Boolean copra interior: foreground eroded so the outline is not read as cracks."""
+    """Boolean copra region. A given foreground is eroded so the outline is
+    not read as cracks; an inferred one (no foreground) is not eroded."""
     if foreground is not None:
         if foreground.shape != masked_image.shape[:2]:
             raise ValueError(
@@ -36,9 +39,9 @@ def _region(
         region = masked_image != 0
 
     if not region.any():
-        raise ValueError("empty foreground mask: no copra pixels found")
+        raise EmptyRegionError("empty foreground mask: no copra pixels found")
 
-    if boundary_margin_px > 0:
+    if foreground is not None and boundary_margin_px > 0:
         k = 2 * boundary_margin_px + 1
         eroded = cv2.erode(region.astype(np.uint8), np.ones((k, k), np.uint8)).astype(bool)
         # A tiny copra region can vanish under erosion; keep the uneroded mask then.
@@ -69,7 +72,8 @@ def extract_edge_features(
     image). `foreground` (bool, same HxW) limits measurement to the copra
     interior: the mask is eroded by `boundary_margin_px` and only edges inside
     it count, so the copra outline itself is not read as cracks. Without it the
-    foreground is inferred from non-zero pixels and treated the same way.
+    foreground is inferred from non-zero pixels and NOT eroded, so the outline
+    counts - that is what features.exclude_boundary: false asks for.
 
     `blur_ksize` (odd int, 0 = off) applies a Gaussian blur before Canny to
     suppress sensor noise. Off by default so existing features are unchanged.
@@ -97,7 +101,10 @@ def extract_edge_features(
         gray = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 0)
 
     edges = cv2.Canny(gray, low_threshold, high_threshold)
-    edges = np.where(region, edges, 0).astype(np.uint8)
+    # Without a foreground the outline must count, and Canny can mark it on
+    # the zeroed-background side - so only clip edges to a given foreground.
+    if foreground is not None:
+        edges = np.where(region, edges, 0).astype(np.uint8)
 
     region_pixel_count = int(region.sum())
     edge_pixel_count = int(np.count_nonzero(edges))

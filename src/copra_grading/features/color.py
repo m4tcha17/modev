@@ -13,12 +13,16 @@ Notes
 - OpenCV uint8 LAB is scaled (L in 0-255, a/b offset by 128). Fine for tree
   models, but these are not standard CIELAB units.
 - OpenCV hue is 0-179 and circular, so hue uses circular mean/std.
-- Robust stats (median, p10, p90) are included next to mean/std so glare and
-  shadow pixels don't dominate. The ablation can compare them.
+- Mean and std only, no median/p10/p90 (ADR-009). Percentiles of uint8
+  channels are integer-valued and bunch tightly, so the outlier rule flagged
+  ordinary photos and dropped them; on hue they are meaningless outright
+  (179 and 0 are neighbours on the wheel).
 """
 
 import cv2
 import numpy as np
+
+from copra_grading.features import EmptyRegionError
 
 _HUE_TO_RAD = np.pi / 90.0  # OpenCV hue 0-179 -> 0-2*pi
 _RAD_TO_HUE = 90.0 / np.pi
@@ -32,7 +36,12 @@ def _circular_hue_stats(hue_values: np.ndarray) -> tuple[float, float]:
     resultant = min(float(np.hypot(sin_mean, cos_mean)), 1.0)
 
     mean_angle = np.arctan2(sin_mean, cos_mean) % (2 * np.pi)
-    std_angle = np.sqrt(-2.0 * np.log(max(resultant, 1e-12)))
+    # Floating-point rounding leaves a uniform hue a hair below resultant 1,
+    # which would give a tiny nonzero std; treat that as exactly 0.
+    if resultant > 1.0 - 1e-12:
+        std_angle = 0.0
+    else:
+        std_angle = np.sqrt(-2.0 * np.log(max(resultant, 1e-12)))
     return float(mean_angle * _RAD_TO_HUE), float(std_angle * _RAD_TO_HUE)
 
 
@@ -50,7 +59,7 @@ def _foreground(
         foreground = np.any(masked_image != 0, axis=-1)
 
     if not foreground.any():
-        raise ValueError("empty foreground mask: no copra pixels found")
+        raise EmptyRegionError("empty foreground mask: no copra pixels found")
 
     if erode_px > 0:
         kernel = cv2.getStructuringElement(
@@ -71,8 +80,8 @@ def extract_color_features(
 ) -> dict[str, float]:
     """Return per-channel statistics for HSV and LAB over copra pixels only.
 
-    Per channel: mean, std, median, p10, p90. Hue uses circular mean/std
-    (OpenCV units) plus median/p10/p90 of the raw values.
+    Per channel: mean and std. Hue uses circular mean/std (OpenCV units) -
+    see module notes.
 
     `masked_image` must be an (H, W, 3) RGB uint8 array - not BGR. cv2.imread
     returns BGR by default and must be converted
@@ -106,11 +115,7 @@ def extract_color_features(
             else:
                 mean, std = float(values.mean()), float(values.std())
 
-            p10, median, p90 = np.percentile(values, [10, 50, 90])
             features[f"{prefix}_mean"] = mean
             features[f"{prefix}_std"] = std
-            features[f"{prefix}_median"] = float(median)
-            features[f"{prefix}_p10"] = float(p10)
-            features[f"{prefix}_p90"] = float(p90)
 
     return features

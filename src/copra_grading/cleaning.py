@@ -10,7 +10,12 @@ never relaxed. If too much data is lost, collect more data.
 import numpy as np
 import pandas as pd
 
-_IDENTIFIER_COLUMNS = ("id", "batch_id", "copra_class", "path")
+from copra_grading.augmentation import ORIGINAL
+
+# Never treated as features. `augment` and `mask_fraction` come from the
+# feature table (features/table.py META_COLUMNS); mask_fraction is numeric,
+# so without this it would be outlier-checked like a feature.
+_IDENTIFIER_COLUMNS = ("id", "batch_id", "copra_class", "path", "augment", "mask_fraction")
 
 
 def _numeric_features(features: pd.DataFrame) -> pd.DataFrame:
@@ -63,3 +68,20 @@ def remove_outliers(features: pd.DataFrame, config: dict) -> tuple[pd.DataFrame,
         features, cleaning_cfg["zscore_threshold"], cleaning_cfg["iqr_multiplier"]
     )
     return features.loc[~flags], flags
+
+
+def remove_outlier_photos(
+    table: pd.DataFrame, config: dict
+) -> tuple[pd.DataFrame, pd.Series]:
+    """Outlier removal for a feature table with augmented rows (column
+    `augment`, one row per photo per transform).
+
+    Flags are computed on the original rows only - the rotated/flipped copies
+    would otherwise skew the mean, std and quartiles. A flagged photo is
+    dropped with every one of its transformed rows. Returns (kept table,
+    flags on the original rows, index-aligned to them).
+    """
+    originals = table[table["augment"] == ORIGINAL]
+    _, flags = remove_outliers(originals, config)
+    dropped_ids = set(originals.loc[flags, "id"])
+    return table.loc[~table["id"].isin(dropped_ids)], flags

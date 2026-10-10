@@ -4,6 +4,7 @@ import pandas as pd
 from copra_grading.cleaning import (
     flag_outliers,
     outlier_value_mask,
+    remove_outlier_photos,
     remove_outliers,
 )
 
@@ -104,3 +105,51 @@ def test_zero_variance_feature_column_does_not_crash_or_flag():
 def test_all_non_numeric_frame_returns_all_false():
     df = pd.DataFrame({"batch_id": ["B1", "B1"], "note": ["a", "b"]})
     assert flag_outliers(df).tolist() == [False, False]
+
+
+def _augmented_table(n_photos=40, transforms=("rot0", "rot90", "flip")):
+    rows = []
+    for p in range(n_photos):
+        for t in transforms:
+            rows.append(
+                {
+                    "id": f"P{p}",
+                    "batch_id": f"B{p // 4}",
+                    "copra_class": "A",
+                    "augment": t,
+                    "mask_fraction": 0.5,
+                    "feat_0": -1.0 + 2.0 * p / (n_photos - 1),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def test_mask_fraction_and_augment_never_contribute():
+    df = _augmented_table()
+    df.loc[df.index[0], "mask_fraction"] = 99.0
+
+    assert flag_outliers(df).sum() == 0
+
+
+def test_remove_outlier_photos_drops_every_row_of_a_flagged_photo():
+    table = _augmented_table()
+    table.loc[(table["id"] == "P5") & (table["augment"] == "rot0"), "feat_0"] = 80.0
+
+    kept, flags = remove_outlier_photos(table, CFG)
+
+    assert "P5" not in set(kept["id"])
+    assert len(kept) == len(table) - 3  # all three transforms of P5
+    assert flags.sum() == 1
+    assert len(flags) == 40  # one flag per original photo
+
+
+def test_remove_outlier_photos_ignores_augmented_rows_in_statistics():
+    # Wild values on augmented rows only: they must neither flag anything
+    # nor shift the stats computed from the originals.
+    table = _augmented_table()
+    table.loc[table["augment"] == "rot90", "feat_0"] = 1000.0
+
+    kept, flags = remove_outlier_photos(table, CFG)
+
+    assert flags.sum() == 0
+    assert len(kept) == len(table)

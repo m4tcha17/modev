@@ -10,8 +10,13 @@ Each photo is masked once; the masked crop is rotated/flipped and features
 are extracted per transform (see augmentation.py for why that is
 equivalent to augmenting the photo). Which transformed rows a training
 fold actually uses is decided later, by augmentation.select_training_rows.
+
+A photo with no usable copra region (EmptyRegionError in any transform) is
+dropped whole - every transform of it - and listed in
+`table.attrs["skipped"]`, never imputed.
 """
 
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +24,7 @@ from joblib import Parallel, delayed
 
 from copra_grading.augmentation import ORIGINAL, TRANSFORMS, apply_transform
 from copra_grading.dataset import load_image
+from copra_grading.features import EmptyRegionError
 from copra_grading.features.combine import extract_all_features
 from copra_grading.preprocessing.otsu import apply_mask, resize_masked
 from copra_grading.preprocessing.pipeline import compute_mask
@@ -32,7 +38,10 @@ def feature_columns(table: pd.DataFrame) -> list[str]:
     return [c for c in table.columns if c not in META_COLUMNS]
 
 
-def _photo_rows(csv_path: Path, row: dict, config: dict, transforms) -> list[dict]:
+def _photo_rows(
+    csv_path: Path, row: dict, config: dict, transforms
+) -> tuple[list[dict], dict | None]:
+    """(feature rows, None), or ([], skip record) if the photo has no usable copra."""
     image = load_image(csv_path, row["path"])
     mask = compute_mask(image, config)
     crop = apply_mask(image, mask)
@@ -43,9 +52,12 @@ def _photo_rows(csv_path: Path, row: dict, config: dict, transforms) -> list[dic
         record = {c: row[c] for c in ID_COLUMNS}
         record["augment"] = name
         record["mask_fraction"] = float(mask.mean())
-        record.update(extract_all_features(masked, config))
+        try:
+            record.update(extract_all_features(masked, config))
+        except EmptyRegionError as err:
+            return [], {"id": row["id"], "augment": name, "reason": str(err)}
         out.append(record)
-    return out
+    return out, None
 
 
 def build_feature_table(
@@ -64,7 +76,16 @@ def build_feature_table(
         delayed(_photo_rows)(csv_path, record, config, transforms)
         for record in df.to_dict(orient="records")
     )
-    return pd.DataFrame([r for rows in per_photo for r in rows])
+    table = pd.DataFrame([r for rows, _ in per_photo for r in rows])
+    skipped = [skip for _, skip in per_photo if skip is not None]
+    table.attrs["skipped"] = skipped
+    if skipped:
+        warnings.warn(
+            f"{len(skipped)} of {len(df)} photos dropped, no usable copra region: "
+            + ", ".join(s["id"] for s in skipped),
+            stacklevel=2,
+        )
+    return table
 
 
 def originals(table: pd.DataFrame) -> pd.DataFrame:

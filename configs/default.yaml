@@ -3,7 +3,7 @@
 
 data:
   # copra-dataset.csv + photos/ in the same directory; `path` column resolves against it
-  csv_path: "data/raw/copra-dataset.csv"
+  csv_path: "dataset/copra_dataset/copra-dataset.csv"
 
 preprocessing:
   # background_grabcut | otsu. Otsu fails on the real photos (grey background
@@ -35,8 +35,8 @@ cleaning:
 splitting:
   method: "stratified_group_kfold"
   n_splits: 5
-  # Must identify the whole copra sample. Several batch_ids can share one
-  # whole sample - switch to a whole-sample ID column once the CSV has one.
+  # Must identify the whole copra sample. One batch_id = one whole sample
+  # (4 photos, one per side) - see ADR-010.
   group_column: "batch_id"
   label_column: "copra_class" # stratify so each fold's A-F mix matches the dataset
   random_state: 42
@@ -44,6 +44,7 @@ splitting:
 augmentation:
   # Per-class copies derived from training-fold class counts: smaller classes
   # get more (ADR-002). Cap is a starting point, not final.
+  base_copies: 1 # extra copies per photo for the largest class (ADR-002)
   max_multiplier: 4
   geometric_only: true
 
