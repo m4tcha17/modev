@@ -8,7 +8,7 @@ Build spec: [`process.md`](process.md). Hard constraints: [`CLAUDE.md`](CLAUDE.m
 
 **No trained model yet.** Implemented and tested: data loading + batch checks (`dataset.py`), background masking (background model + GrabCut; Otsu failed on real photos) + resize, GLCM / HSV-LAB / Canny feature extraction measured inside the copra only, whole-dataset feature table (8 rotations/flips per photo, cached for augmentation), outlier removal, StratifiedGroupKFold split. Still `NotImplementedError`: augmentation, models + tuning, selection, evaluation, explainability, artifact, Streamlit app, synthetic data generator.
 
-Current export (`dataset/copra_dataset/`, from the 2026-10-04 08:10 export): 376 photos in 94 batches — 200 class `A`, 176 class `B`. A two-class (A vs B) model can be built from it; classes C–F still need collecting.
+Current export (`dataset/copra_dataset/`, CSV dated 2026-10-10): 576 photos in 144 batches — 200 class `A`, 176 class `B`, 200 class `D`. A three-class (A/B/D) model can be built from it as an interim result; classes C, E and F are still being collected. Class D was photographed under different lighting — a stated limitation (ADR-011).
 
 ## Extract features
 

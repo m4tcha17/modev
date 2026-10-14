@@ -38,6 +38,10 @@ MOISTURE_ORDER = ("F", "A", "B", "C", "D", "E")
 REQUIRED_COLUMNS = ("id", "batch_id", "copra_class", "path")
 PHOTOS_PER_BATCH = 4
 
+# Header names used by other export versions, renamed on load. The
+# 2026-10-14 export writes the photo path column as "Photo photo".
+COLUMN_ALIASES = {"Photo photo": "path"}
+
 
 def load_dataset(csv_path: Path) -> pd.DataFrame:
     """Read the CSV, check required columns and class values.
@@ -46,6 +50,7 @@ def load_dataset(csv_path: Path) -> pd.DataFrame:
     a class outside VALID_CLASSES.
     """
     df = pd.read_csv(csv_path, dtype={"id": str, "batch_id": str, "copra_class": str})
+    df = df.rename(columns={k: v for k, v in COLUMN_ALIASES.items() if v not in df.columns})
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"missing required columns: {missing}")
