@@ -8,9 +8,6 @@ __pycache__/
 # Jupyter
 .ipynb_checkpoints/
 
-# uv
-.python-version
-
 # Data (keep placeholders)
 data/raw/*
 data/processed/*

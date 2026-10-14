@@ -1,6 +1,6 @@
 """Streamlit deployment app. process.md Step 9.
 
-User uploads ONE photo. The app runs Steps 2-3 on it (Otsu mask, resize,
+User uploads ONE photo. The app runs Steps 2-3 on it (background-model + GrabCut mask, resize,
 GLCM + HSV/LAB + Canny features, using the artifact's saved config), the
 selected model returns a class A-F (shown with its moisture band from
 dataset.CLASS_DESCRIPTIONS), and on request a SHAP explanation for
@@ -15,7 +15,7 @@ ARTIFACT_PATH = Path("models/selected")
 
 
 def main() -> None:
-    """Upload widget -> load_artifact -> mask_image/apply_mask/resize_masked
+    """Upload widget -> load_artifact -> preprocessing.pipeline.preprocess
     -> extract_all_features -> model.predict -> optional explain_single_prediction.
     """
     raise NotImplementedError

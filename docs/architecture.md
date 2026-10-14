@@ -57,4 +57,4 @@ flowchart TD
 
 ## Placeholder data
 
-`scripts/make_synthetic_dataset.py` (stub) generates a schema-matching dataset (4 photos per `batch_id`, classes A–F) for testing the wiring when real data is thin. The first real export (`dataset/`, 2026-10-04) has 34 batches, all class `A`.
+`scripts/make_synthetic_dataset.py` (stub) generates a schema-matching dataset (4 photos per `batch_id`, classes A–F) for testing the wiring when real data is thin. The latest real export (2026-10-10) has 576 photos in 144 batches: classes `A` (50 batches), `B` (44) and `D` (50). Classes C, E and F are still being collected. Class D was photographed under different lighting (ADR-011).

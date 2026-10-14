@@ -39,6 +39,15 @@ def test_load_dataset_reads_schema(tmp_path):
     assert set(df["copra_class"]) == {"A", "F"}
 
 
+def test_load_dataset_renames_photo_photo_header_to_path(tmp_path):
+    csv = tmp_path / "copra-dataset.csv"
+    _batch("b1", "A").rename(columns={"path": "Photo photo"}).to_csv(csv, index=False)
+
+    df = load_dataset(csv)
+
+    assert list(df.columns) == ["id", "batch_id", "copra_class", "path"]
+
+
 def test_load_dataset_rejects_missing_column(tmp_path):
     csv = tmp_path / "copra-dataset.csv"
     _batch("b1", "A").drop(columns=["batch_id"]).to_csv(csv, index=False)

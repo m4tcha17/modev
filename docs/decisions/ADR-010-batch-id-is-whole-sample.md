@@ -13,7 +13,7 @@ Confirmed by the thesis team: one `batch_id` = one whole copra sample. Each samp
 
 `splitting.group_column` stays `batch_id`. No new column is needed.
 
-Checked on the 2026-10-05 export: 94 batches, every batch has exactly 4 photos and exactly one `copra_class` (A: 50 batches, B: 44).
+Checked on the 2026-10-05 export: 94 batches, every batch has exactly 4 photos and exactly one `copra_class` (A: 50 batches, B: 44). Rechecked on the 2026-10-10 export: 144 batches, same result (A: 50, B: 44, D: 50).
 
 ## What would change it
 

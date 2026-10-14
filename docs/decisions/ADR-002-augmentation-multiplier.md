@@ -13,7 +13,7 @@ Multipliers computed per training fold from class counts (`augmentation.class_mu
 
 ## What would change it
 
-Real per-class counts across A–F. The 2026-10-04 export is all class `A`, so the cap can't be tuned yet.
+Real per-class counts across A–F. The 2026-10-10 export has only classes `A` (200 photos), `B` (176) and `D` (200), so the cap can't be tuned yet.
 
 ## Owner
 

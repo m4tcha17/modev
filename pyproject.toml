@@ -2,7 +2,7 @@
 name = "copra-grading"
 version = "0.1.0"
 description = "Copra classification pipeline, classes A-F (image feature extraction + tree-ensemble classification)"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "opencv-python>=4.9",
     "scikit-image>=0.22",
