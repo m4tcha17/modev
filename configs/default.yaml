@@ -48,12 +48,6 @@ augmentation:
   max_multiplier: 4
   geometric_only: true
 
-feature_selection:
-  # Greedy redundancy pruning per outer training fold: drop a feature whose
-  # |Spearman rho| with an earlier kept feature exceeds this. null = keep all
-  # 65. Off: 0.95 (27 features) lowered every model's Macro F1 (ADR-012).
-  correlation_threshold: null
-
 tuning:
   n_trials: 75 # per model, per outer fold (ADR-003)
   objective_metric: "f1_macro"

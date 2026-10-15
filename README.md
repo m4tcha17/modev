@@ -6,9 +6,9 @@ Build spec: [`process.md`](process.md). Hard constraints: [`CLAUDE.md`](CLAUDE.m
 
 ## Status
 
-**No trained model yet.** Implemented and tested: data loading + batch checks (`dataset.py`), background masking (background model + GrabCut; Otsu failed on real photos) + resize, GLCM / HSV-LAB / Canny feature extraction measured inside the copra only, whole-dataset feature table (8 rotations/flips per photo, cached for augmentation), outlier removal, StratifiedGroupKFold split, nested-CV Optuna tuning of the four models, model selection, evaluation metrics. Still `NotImplementedError`: augmentation, explainability, artifact, Streamlit app, synthetic data generator.
+Implemented and tested: data loading + batch checks (`dataset.py`), background masking (background model + GrabCut; Otsu failed on real photos) + resize, GLCM / HSV-LAB / Canny feature extraction measured inside the copra only, whole-dataset feature table (8 rotations/flips per photo, cached for augmentation), outlier removal, StratifiedGroupKFold split, geometric augmentation, nested-CV Optuna tuning of the four models, model selection, evaluation metrics. Models are trained and compared (LightGBM selected); the model is not yet saved for deployment. Still `NotImplementedError`: explainability, artifact, Streamlit app.
 
-Current export (`dataset/copra_dataset/`, CSV dated 2026-10-10): 576 photos in 144 batches — 200 class `A`, 176 class `B`, 200 class `D`. A three-class (A/B/D) model can be built from it as an interim result; classes C, E and F are still being collected. Class D was photographed under different lighting — a stated limitation (ADR-011).
+Current export (`dataset/copra-dataset.csv`, dated 2026-10-14): 1000 photos in 250 batches — 200 photos (50 batches) each of classes `A`–`E`. Class F is still being collected. Class D was photographed under different lighting — a stated limitation (ADR-011).
 
 ## Extract features
 
@@ -34,7 +34,7 @@ uv run pytest
 ```
 src/copra_grading/
 ├── dataset.py         # Step 1: load CSV + photos, batch checks
-├── preprocessing/     # Step 2: Otsu masking, resize
+├── preprocessing/     # Step 2: background masking (GrabCut; Otsu kept for comparison), resize
 ├── features/          # Step 3: GLCM texture, HSV/LAB color, Canny edges
 ├── cleaning.py        # Step 4a: drop outlier rows
 ├── splitting.py       # Step 4b: StratifiedGroupKFold (before augmentation)
@@ -47,8 +47,7 @@ src/copra_grading/
 
 app/streamlit_app.py   # Step 9: one photo in, one class out
 configs/default.yaml   # all tunable parameters in one place
-notebooks/             # exploration only, no pipeline logic
-scripts/               # synthetic dataset generator
+scripts/               # run the pipeline: mask_photos, extract_features, prepare_folds, train_models
 tests/                 # mirrors src/ layout
 docs/                  # architecture doc + ADRs
 ```
