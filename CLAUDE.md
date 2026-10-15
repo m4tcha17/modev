@@ -21,7 +21,7 @@ All four models are compared on Macro F1 across the 5 folds. The best of Random 
 
 ## Git
 
-**Never `git commit`.** Stage changes if useful, but leave committing to the user — commits in this repo are done manually, always.
+**Never touch version control.** Do not run any `git` command: no branching, switching, staging, committing, pushing, stashing, restoring, `git rm`, or reading history/status. Edit and delete files with normal file tools only. All version control in this repo is done manually by the user, always.
 
 ## Everything else
 
