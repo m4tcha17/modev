@@ -43,7 +43,6 @@ def main() -> None:
     scores.to_csv(args.out / "cv_scores.csv", index=False)
     (args.out / "best_params.json").write_text(json.dumps(result.best_params, indent=2))
     result.predictions.to_csv(args.out / "oof_predictions.csv", index=False)
-    (args.out / "selected_features.json").write_text(json.dumps(result.features, indent=2))
 
     summary = scores.groupby("model")["macro_f1"].agg(["mean", "std"])
 

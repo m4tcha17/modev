@@ -1,17 +1,17 @@
 # ADR-012: Correlation-Based Feature Pruning
 
-**Status:** rejected 2026-10-15. Code kept; off by default (`correlation_threshold: null`).
+**Status:** rejected 2026-10-15. Code removed in the cleanup that followed; this ADR is the record of the experiment.
 **Spec reference:** `process.md` Step 5 (not named in the spec; added after the first full run)
 
 ## Decision
 
-When enabled, each outer training fold drops redundant features before tuning. A greedy pass in extraction order keeps a feature only if its |Spearman rho| with every already-kept feature is at most `feature_selection.correlation_threshold` (tested at 0.95). `null`, the default, keeps all features.
+As tested, each outer training fold dropped redundant features before tuning. A greedy pass in extraction order kept a feature only if its |Spearman rho| with every already-kept feature was at most 0.95.
 
 - **Fitted per outer fold, on that fold's training photos only.** The validation fold never influences the list. Inner tuning folds reuse the outer fold's list.
 - **Unsupervised.** Labels are never used, so no class information leaks into selection.
 - **Original photos only.** Augmented copies are near-duplicates and would overweight photos with more copies.
 - **Same list for all four models**, Logistic Regression included, so the comparison still isolates algorithm strength.
-- `scripts/train_models.py` writes the per-fold lists to `results/selected_features.json`.
+- `scripts/train_models.py` wrote the per-fold lists to `results/selected_features.json`.
 
 ## Rationale
 
@@ -32,11 +32,11 @@ Not done:
 
 ## Result
 
-Full nested CV at 0.95 (27-28 features per fold), run together with the narrowed tree spaces (ADR-003): mean Macro F1 fell for Logistic Regression (0.777 to 0.757), LightGBM (0.734 to 0.713) and XGBoost (0.722 to 0.704); Random Forest was flat (0.676 to 0.680). Logistic Regression lost as much as the trees, so the pruned features were not pure duplicates: pairs above |rho| 0.95 still carried signal. Pruning is off. The thesis team decided not to tune the threshold further.
+Full nested CV at 0.95 (27-28 features per fold), run together with the narrowed tree spaces (ADR-003): mean Macro F1 fell for Logistic Regression (0.777 to 0.757), LightGBM (0.734 to 0.713) and XGBoost (0.722 to 0.704); Random Forest was flat (0.676 to 0.680). Logistic Regression lost as much as the trees, so the pruned features were not pure duplicates: pairs above |rho| 0.95 still carried signal. Pruning was removed. The thesis team decided not to tune the threshold further.
 
 ## Consequences
 
-None while off. If ever re-enabled, the deployed model needs the pruned list from its final fit: when `artifact.py` is implemented, prune on all training photos with the same threshold and store the list with the model.
+None: the pipeline uses all features. If ever revived (recoverable from git history, commit 524ee9e), the deployed model would need the pruned list from its final fit stored with it.
 
 ## What would change it
 

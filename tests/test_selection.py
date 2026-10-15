@@ -32,9 +32,9 @@ def test_tuning_never_sees_outer_validation_photos(feature_table, config, monkey
     seen = []
     real = selection.tune_model
 
-    def spy(name, table, cfg, n_trials, seed, **kwargs):
+    def spy(name, table, cfg, n_trials, seed):
         seen.append(table)
-        return real(name, table, cfg, n_trials, seed, **kwargs)
+        return real(name, table, cfg, n_trials, seed)
 
     monkeypatch.setattr(selection, "tune_model", spy)
     result = cross_validate_models(feature_table, config, ("random_forest",), n_trials=1)
@@ -46,27 +46,3 @@ def test_tuning_never_sees_outer_validation_photos(feature_table, config, monkey
         # tuning gets every transform of its photos, so inner folds can augment
         assert len(tuned) == 8 * tuned["id"].nunique()
 
-
-def test_feature_selection_fitted_on_training_photos_only(feature_table, config, monkeypatch):
-    seen = []
-    real = selection.selected_features
-
-    def spy(table, cfg):
-        seen.append(table)
-        return real(table, cfg)
-
-    monkeypatch.setattr(selection, "selected_features", spy)
-    result = cross_validate_models(feature_table, config, ("random_forest",), n_trials=1)
-    preds = result.predictions
-    assert len(seen) == 5
-    for k, fitted_on in enumerate(seen):
-        val = preds[preds["fold"] == k]
-        assert set(fitted_on["batch_id"]).isdisjoint(val["batch_id"])
-
-
-def test_redundant_feature_pruned_and_recorded(feature_table, config):
-    table = feature_table.assign(feat_1_copy=feature_table["feat_1"] * 3)
-    # fixture's feat_1/feat_2 both track the class centre (rho ~0.99); the copy is 1.0
-    config["feature_selection"] = {"correlation_threshold": 0.999}
-    result = cross_validate_models(table, config, ("random_forest",), n_trials=1)
-    assert result.features == [["feat_1", "feat_2"]] * 5
