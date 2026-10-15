@@ -6,7 +6,7 @@ Build spec: [`process.md`](process.md). Hard constraints: [`CLAUDE.md`](CLAUDE.m
 
 ## Status
 
-**No trained model yet.** Implemented and tested: data loading + batch checks (`dataset.py`), background masking (background model + GrabCut; Otsu failed on real photos) + resize, GLCM / HSV-LAB / Canny feature extraction measured inside the copra only, whole-dataset feature table (8 rotations/flips per photo, cached for augmentation), outlier removal, StratifiedGroupKFold split. Still `NotImplementedError`: augmentation, models + tuning, selection, evaluation, explainability, artifact, Streamlit app, synthetic data generator.
+**No trained model yet.** Implemented and tested: data loading + batch checks (`dataset.py`), background masking (background model + GrabCut; Otsu failed on real photos) + resize, GLCM / HSV-LAB / Canny feature extraction measured inside the copra only, whole-dataset feature table (8 rotations/flips per photo, cached for augmentation), outlier removal, StratifiedGroupKFold split, nested-CV Optuna tuning of the four models, model selection, evaluation metrics. Still `NotImplementedError`: augmentation, explainability, artifact, Streamlit app, synthetic data generator.
 
 Current export (`dataset/copra_dataset/`, CSV dated 2026-10-10): 576 photos in 144 batches — 200 class `A`, 176 class `B`, 200 class `D`. A three-class (A/B/D) model can be built from it as an interim result; classes C, E and F are still being collected. Class D was photographed under different lighting — a stated limitation (ADR-011).
 
@@ -14,6 +14,8 @@ Current export (`dataset/copra_dataset/`, CSV dated 2026-10-10): 576 photos in 1
 
 ```bash
 uv run python scripts/extract_features.py   # -> data/processed/features.csv + mask_preview.jpg
+uv run python scripts/prepare_folds.py      # -> features_clean.csv + folds.csv (outliers, folds)
+uv run python scripts/train_models.py       # -> data/processed/results/ (nested CV, selection, metrics)
 ```
 
 Check `mask_preview.jpg` by eye after every new export: red outline = detected copra.

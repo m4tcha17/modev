@@ -48,9 +48,19 @@ augmentation:
   max_multiplier: 4
   geometric_only: true
 
+feature_selection:
+  # Greedy redundancy pruning per outer training fold: drop a feature whose
+  # |Spearman rho| with an earlier kept feature exceeds this. null = keep all
+  # 65. Off: 0.95 (27 features) lowered every model's Macro F1 (ADR-012).
+  correlation_threshold: null
+
 tuning:
-  n_trials: 75 # per model (ADR-003)
+  n_trials: 75 # per model, per outer fold (ADR-003)
   objective_metric: "f1_macro"
+  # Nested CV: Optuna tunes inside each outer training fold on its own
+  # grouped inner folds, so the 5 outer folds stay unseen (ADR-003).
+  inner_n_splits: 3
+  random_state: 42
 
 artifact:
   serialization: "native" # joblib for sklearn-compatible, native save for xgboost/lightgbm (ADR-005)
