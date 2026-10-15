@@ -35,6 +35,7 @@ flowchart TD
 | `splitting.py` | 4b | StratifiedGroupKFold(5), stratified by `copra_class`, grouped by `splitting.group_column` (whole sample = `batch_id`, ADR-010), before augmentation |
 | `augmentation.py` | 4c | Rotation/flip only, more copies for smaller classes (ADR-002) |
 | `folds.py` | 4b–4c | `make_folds`: split originals, then per fold pick augmented training copies (multipliers from that fold's class counts); val = originals only. `scripts/prepare_folds.py` runs 4a–4c |
+| `feature_selection.py` | 5 | Per outer training fold: drop features with \|Spearman rho\| > `feature_selection.correlation_threshold` to an earlier kept one; unsupervised, originals only, same list for all four models. Off by default: tried and rejected (ADR-012) |
 | `models/*.py` | 5 | LR (standardized, baseline) + RF/XGBoost/LightGBM (unscaled), all class-weighted |
 | `models/tuning.py` | 5 | Optuna on Macro F1, same grouped + stratified folds (ADR-003) |
 | `selection.py` | 6 | Per-fold Macro F1 for all four, pick best ensemble |
