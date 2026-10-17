@@ -10,13 +10,20 @@ Build spec: [`process.md`](process.md). Hard constraints: [`CLAUDE.md`](CLAUDE.m
 
 Current export (`dataset/copra_dataset/`, CSV dated 2026-10-10): 576 photos in 144 batches — 200 class `A`, 176 class `B`, 200 class `D`. A three-class (A/B/D) model can be built from it as an interim result; classes C, E and F are still being collected. Class D was photographed under different lighting — a stated limitation (ADR-011).
 
-## Extract features
+## Run the pipeline
 
-```bash
-uv run python scripts/extract_features.py   # -> data/processed/features.csv + mask_preview.jpg
-uv run python scripts/prepare_folds.py      # -> features_clean.csv + folds.csv (outliers, folds)
-uv run python scripts/train_models.py       # -> data/processed/results/ (nested CV, selection, metrics)
+```powershell
+.\run                       # menu: pick a process by number
+.\run mask                  # background masking -> dataset/masked_data/ (for checking by eye)
+.\run features              # -> data/processed/features.csv + mask_preview.jpg
+.\run folds                 # -> features_clean.csv + folds.csv (outliers, folds)
+.\run train                 # -> data/processed/results/ (nested CV, selection, metrics), ~80 min
+.\run quick-train           # training smoke test, 3 trials per model
+.\run all                   # features -> folds -> train, stops at the first failure
+.\run train --n-trials 10   # extra arguments go to that process's script
 ```
+
+`run.bat` calls `uv run python run.py`; the scripts it runs live in `scripts/`.
 
 Check `mask_preview.jpg` by eye after every new export: red outline = detected copra.
 
