@@ -7,8 +7,6 @@ Nested CV: tune_model only ever receives the photos of one outer training
 fold. It re-splits them with folds.make_folds (grouped, stratified, split
 before augment) into tuning.inner_n_splits inner folds and scores each trial
 on the inner validation originals.
-
-`features` is the outer fold's pruned feature list (ADR-012); default: all.
 """
 
 import copy
@@ -38,13 +36,12 @@ def tune_model(
     config: dict,
     n_trials: int,
     seed: int,
-    features: list[str] | None = None,
 ) -> optuna.Study:
     """Run an Optuna study for the named model, maximising mean Macro F1
     over grouped + stratified inner folds of `table` (never ungrouped CV -
     leaks parts of one whole sample)."""
     label = config["splitting"]["label_column"]
-    features = features or feature_columns(table)
+    features = feature_columns(table)
     inner_folds = make_folds(table, inner_config(config))
 
     def objective(trial: optuna.Trial) -> float:

@@ -7,8 +7,6 @@ Logistic Regression is a reference point only, never selectable.
 Nested CV: for each outer fold, every model is tuned on that fold's training
 photos only (tuning.tune_model), refitted on the fold's augmented training
 rows with the best params, and scored on the fold's validation originals.
-Redundant features are pruned per outer fold, on its training photos only,
-and all four models use the same pruned list (ADR-012).
 """
 
 from dataclasses import dataclass
@@ -17,7 +15,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score
 
-from copra_grading.feature_selection import selected_features
+from copra_grading.features.table import feature_columns
 from copra_grading.folds import make_folds
 from copra_grading.models import fit_model
 from copra_grading.models.tuning import tune_model
@@ -30,7 +28,6 @@ class CVResult:
     scores: dict[str, list[float]]
     best_params: dict[str, list[dict]]
     predictions: pd.DataFrame  # id, batch_id, copra_class, fold, model, predicted
-    features: list[list[str]]  # pruned feature list per outer fold (ADR-012)
 
 
 # --- selection ---
@@ -46,19 +43,15 @@ def cross_validate_models(
     label = config["splitting"]["label_column"]
     group = config["splitting"]["group_column"]
     seed = config["tuning"]["random_state"]
+    features = feature_columns(table)
     scores = {name: [] for name in model_names}
     best_params = {name: [] for name in model_names}
     predictions = []
-    fold_features = []
 
     for fold in make_folds(table, config):
         train_photos = table[table["id"].isin(fold.train["id"])]
-        features = selected_features(train_photos, config)
-        fold_features.append(features)
-        print(f"fold {fold.index}: {len(features)} features after pruning", flush=True)
         for name in model_names:
-            study = tune_model(name, train_photos, config, n_trials, seed + fold.index,
-                               features=features)
+            study = tune_model(name, train_photos, config, n_trials, seed + fold.index)
             model = fit_model(name, study.best_params, fold.train[features],
                               fold.train[label], seed + fold.index)
             pred = model.predict(fold.val[features])
@@ -71,8 +64,7 @@ def cross_validate_models(
             )
             print(f"fold {fold.index} {name}: macro F1 {scores[name][-1]:.3f}", flush=True)
 
-    return CVResult(scores, best_params, pd.concat(predictions, ignore_index=True),
-                    fold_features)
+    return CVResult(scores, best_params, pd.concat(predictions, ignore_index=True))
 
 
 def select_model(fold_scores: dict[str, list[float]]) -> str:
