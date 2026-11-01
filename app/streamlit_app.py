@@ -8,17 +8,26 @@ that photo is shown, grouped by feature type (texture / color / edge).
 
 Run: uv run streamlit run app/streamlit_app.py
 """
-
+import streamlit as st
+from frontend import render_app
 from pathlib import Path
 
 ARTIFACT_PATH = Path("models/selected")
 
 
+#PAGE CONFIGURATION
+st.set_page_config(
+    page_title="Copra Quality Classification",
+    page_icon="🥥",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
 def main() -> None:
     """Upload widget -> load_artifact -> preprocessing.pipeline.preprocess
     -> extract_all_features -> model.predict -> optional explain_single_prediction.
     """
-    raise NotImplementedError
+    render_app()
 
 
 if __name__ == "__main__":
