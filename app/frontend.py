@@ -5,12 +5,14 @@ import streamlit as st
 from dataclasses import dataclass
 from config import (
     APP_TITLE,
-    ALLOWED_EXTENSIONS,
+    ALLOWED_FORMATS,
+    ALLOWED_EXTS,
     MAX_FILE_SIZE
 )
 import html
 import time
-
+from io import BytesIO
+from PIL import Image, UnidentifiedImageError
 
 # MOCK DATA
 @dataclass(frozen=True)
@@ -202,7 +204,7 @@ body, .stApp, [data-testid="stAppViewContainer"] { background: var(--bg); }
     font-weight: 500;
 }
 .st-key-upload_zone [data-testid="stFileUploaderDropzoneInstructions"]::after {
-    content: "Accepts JPG, PNG — max 25 MB";
+    content: "Accepts JPG, JPEG, PNG — max 25 MB";
     order: 3;
     color: var(--muted);
     font-family: var(--mono);
@@ -450,13 +452,34 @@ body, .stApp, [data-testid="stAppViewContainer"] { background: var(--bg); }
     line-height: 1.6;
 }
 .shap-note strong { color: var(--ink); font-weight: 600; }
-.validation-error {
-    margin: 8px 0 12px;
-    padding: 10px 12px;
-    border-left: 3px solid #c0392b;
+.error-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 12px;
+    padding: 12px 16px;
+    border: 1px solid #e6b8b2;
+    border-left: 4px solid #c0392b;
+    border-radius: 2px;
     background: #fbefed;
     color: #8e2e23;
     font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+.error-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #c0392b;
+    color: #ffffff;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
 }
 
 @media (max-width: 680px) {
@@ -503,7 +526,10 @@ def initialize_state() -> None:
         "phase": "idle",
         "result": None,
         "shap_open": False,
+        "stored_file": None,     # {"name", "size", "data"} once accepted
         "uploader_nonce": 0,
+        "upload_error": None,
+
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -526,6 +552,11 @@ def format_file_size(size: int) -> str:
 def clear_upload() -> None:
     # A new widget key makes Streamlit discard the uploaded file.
     # reset_for_new_upload(None) then clears phase/result/SHAP on the rerun.
+    st.session_state.stored_file = None
+    st.session_state.upload_error = None
+    st.session_state.phase = "idle"
+    st.session_state.result = None
+    st.session_state.shap_open = False
     st.session_state.uploader_nonce += 1
 
 def render_header() -> None:
@@ -546,16 +577,16 @@ def render_header() -> None:
     )
 
 
-def render_preview(uploaded_file: st.runtime.uploaded_file_manager.UploadedFile) -> None:
-    safe_name = html.escape(uploaded_file.name)
+def render_preview(file: dict) -> None:
+    safe_name = html.escape(file["name"])
     with st.container(key="image_preview"):
-        st.image(uploaded_file.getvalue(), use_container_width=True)
+        st.image(file["data"], use_container_width=True)
         st.markdown(
             f"""
             <div class="file-meta">
                 <div class="eyebrow">Image Loaded</div>
                 <div class="file-name">{safe_name}</div>
-                <div class="file-size">{format_file_size(uploaded_file.size)}</div>
+                <div class="file-size">{format_file_size(file["size"])}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -620,6 +651,40 @@ def classify_image() -> ClassificationResult:
     time.sleep(2.2)
     return MOCK_RESULT
 
+def validate_upload(uploaded_file) -> str | None:
+    name = uploaded_file.name
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext not in ALLOWED_EXTS:
+        return "Wrong file type. Only JPG, JPEG or PNG images are accepted."
+    if uploaded_file.size > MAX_FILE_SIZE:
+        return f"File too large ({format_file_size(uploaded_file.size)}). The maximum size is 25 MB."
+    try:
+        data = uploaded_file.getvalue()
+    except Exception:
+        return "The file could not be read. Please try uploading it again."
+    if not data:
+        return "The file is empty and could not be read."
+    try:
+        with Image.open(BytesIO(data)) as img:
+            img.verify()
+            fmt = img.format
+    except (UnidentifiedImageError, OSError, SyntaxError):
+        return "The file could not be read as an image. It may be corrupted."
+    if fmt not in ALLOWED_FORMATS:
+        return "Wrong file type. Only JPG, JPEG or PNG images are accepted."
+    return None
+
+
+def render_error_bar(message: str) -> None:
+    st.markdown(
+        f"""
+        <div class="error-bar" role="alert">
+            <span class="error-icon">!</span>
+            <span>{html.escape(message)}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # 6–9. Session state, UI components, main logic, and entry point
 def main() -> None:
@@ -628,31 +693,39 @@ def main() -> None:
     render_header()
 
     section_label("01", "Image Upload")
-    with st.container(key="upload_zone"):
-        uploaded_file = st.file_uploader(
-            "Drag and drop copra image here or click to browse",
-            type=("jpg", "jpeg", "png"),
-            help="Accepts JPG, PNG — max 25 MB",
-            accept_multiple_files=False,                       # one image only
-            key=f"copra_uploader_{st.session_state.uploader_nonce}",
-            label_visibility="collapsed",
-        )
 
-    signature = (
-        (uploaded_file.name, uploaded_file.size) if uploaded_file is not None else None
-    )
-    reset_for_new_upload(signature)
+    # Error bar sits at the top of the upload zone
+    if st.session_state.upload_error:
+        render_error_bar(st.session_state.upload_error)
 
-    file_is_valid = uploaded_file is not None and uploaded_file.size <= MAX_FILE_SIZE
-    if uploaded_file is not None:
-        render_preview(uploaded_file)
-        if not file_is_valid:
-            st.markdown(
-                '<div class="validation-error">The selected image exceeds the 25 MB limit. '
-                "Choose a smaller JPG or PNG file.</div>",
-                unsafe_allow_html=True,
+    stored = st.session_state.stored_file
+
+    if stored is None:
+        with st.container(key="upload_zone"):
+            uploaded = st.file_uploader(
+                "Upload copra image",
+                accept_multiple_files=False,
+                key=f"copra_uploader_{st.session_state.uploader_nonce}",
+                label_visibility="collapsed",
             )
 
+        if uploaded is not None:
+            error = validate_upload(uploaded)
+            if error is None:
+                st.session_state.stored_file = {
+                    "name": uploaded.name,
+                    "size": uploaded.size,
+                    "data": uploaded.getvalue(),
+                }
+                st.session_state.upload_error = None
+            else:
+                st.session_state.upload_error = error
+            st.session_state.uploader_nonce += 1
+            st.rerun()
+    else:
+        render_preview(stored)
+
+    file_is_valid = stored is not None
     button_slot = st.empty()
     with button_slot.container():
         with st.container(key="classify_button"):
@@ -662,7 +735,7 @@ def main() -> None:
                 key="classify",
             )
 
-    if classify_clicked and uploaded_file is not None:
+    if classify_clicked and file_is_valid:
         st.session_state.phase = "loading"
         st.session_state.shap_open = False
         button_slot.empty()

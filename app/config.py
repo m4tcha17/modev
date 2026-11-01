@@ -6,7 +6,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MODEL_PATH = PROJECT_ROOT / "models" / "selected"
 
 # Upload settings
-ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png"]
+ALLOWED_FORMATS = {"JPEG", "PNG"}
+ALLOWED_EXTS = ["jpg", "jpeg", "png"]
 MAX_FILE_SIZE = 25 * 1024 * 1024
 
 # Classification settings
