@@ -145,42 +145,74 @@ body, .stApp, [data-testid="stAppViewContainer"] { background: var(--bg); }
 .section-label.small .section-title { font-size: 13px; }
 
 /* Native file uploader, restyled to match the designed drop zone. */
+/* UPLOAD ZONE */
 .st-key-upload_zone [data-testid="stFileUploader"] {
-    margin-bottom: 4px;
+    margin-bottom: 0 !important;
 }
+
 .st-key-upload_zone [data-testid="stFileUploaderDropzone"] {
-    min-height: 164px;
-    padding: 38px 24px;
-    border: 2px dashed var(--border);
-    border-radius: 4px;
-    background: var(--surface);
-    transition: border-color .18s ease, background .18s ease;
+    height: 264px !important;
+    min-height: 264px !important;
+    padding: 30px 24px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 2px dashed var(--border) !important;
+    border-radius: 4px !important;
+    background: #ffffff !important;
+    cursor: pointer;
 }
+
 .st-key-upload_zone [data-testid="stFileUploaderDropzone"]:hover {
-    border-color: var(--accent);
-    background: var(--accent-light);
+    border-color: var(--accent) !important;
+    background: var(--accent-light) !important;
 }
-.st-key-upload_zone [data-testid="stFileUploaderDropzoneInstructions"] > div > span {
+
+/* Icon */
+.st-key-upload_zone [data-testid="stFileUploaderDropzone"] svg {
+    color: #b8b8b3 !important;
+    width: 32px !important;
+    height: 32px !important;
+}
+
+/* Instructions wrapper: stack icon + custom text, centered */
+.st-key-upload_zone [data-testid="stFileUploaderDropzoneInstructions"] {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    gap: 14px !important;
+}
+
+/* Hide Streamlit's default text ("Drag and drop file here", "Limit 200MB…") */
+.st-key-upload_zone [data-testid="stFileUploaderDropzoneInstructions"] > div {
+    display: none !important;
+}
+
+/* Inject the custom text */
+.st-key-upload_zone [data-testid="stFileUploaderDropzoneInstructions"]::before {
+    content: "Drag and drop copra image here or click to browse";
+    order: 2;
+    margin-top: 18px;
     color: var(--ink);
     font-family: var(--sans);
-    font-size: 16px;
+    font-size: 19px;
     font-weight: 500;
 }
-.st-key-upload_zone [data-testid="stFileUploaderDropzoneInstructions"] > div > small {
+.st-key-upload_zone [data-testid="stFileUploaderDropzoneInstructions"]::after {
+    content: "Accepts JPG, PNG — max 25 MB";
+    order: 3;
     color: var(--muted);
     font-family: var(--mono);
     font-size: 11px;
+    letter-spacing: 0.04em;
 }
+
+/* Hide the Browse button (the whole drop zone is still clickable) */
 .st-key-upload_zone [data-testid="stFileUploaderDropzone"] button {
-    border: 1px solid var(--border);
-    border-radius: 2px;
-    background: transparent;
-    color: var(--ink);
-    font-family: var(--sans);
-}
-.st-key-upload_zone [data-testid="stFileUploaderFile"] {
-    border-radius: 2px;
-    background: var(--surface);
+    display: none !important;
 }
 
 .st-key-image_preview {
@@ -214,7 +246,8 @@ body, .stApp, [data-testid="stAppViewContainer"] { background: var(--bg); }
     font-weight: 600;
 }
 .file-size {
-    margin-top: 3px;
+    margin: 3px 0;
+    margin-bottom: 10px;
     color: var(--muted);
     font-family: var(--mono);
     font-size: 11px;
@@ -246,6 +279,7 @@ body, .stApp, [data-testid="stAppViewContainer"] { background: var(--bg); }
 }
 .st-key-shap_button button {
     min-height: 45px;
+    margin: 10px 0;
     padding: 0 24px;
     border: 1px solid var(--ink);
     border-radius: 2px;
@@ -380,6 +414,29 @@ body, .stApp, [data-testid="stAppViewContainer"] { background: var(--bg); }
     animation: bar-in .7s cubic-bezier(.22, 1, .36, 1);
     transform-origin: left;
 }
+
+.st-key-clear_button_wrap { padding: 0 18px 16px; }
+.st-key-clear_button_wrap button {
+    min-height: 36px;
+    padding: 0 16px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 14px;
+}
+.st-key-clear_button_wrap button:hover {
+    border-color: #c0392b;
+    color: #c0392b;
+}
+
+/* The preview already shows name and size, so hide the default file row */
+.st-key-upload_zone [data-testid="stFileUploaderFile"],
+.st-key-upload_zone [data-testid="stFileUploaderFileList"] {
+    display: none !important;
+}
+
 @keyframes bar-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .shap-note {
     margin: 16px 0 20px;
@@ -446,6 +503,7 @@ def initialize_state() -> None:
         "phase": "idle",
         "result": None,
         "shap_open": False,
+        "uploader_nonce": 0,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -465,6 +523,10 @@ def format_file_size(size: int) -> str:
         return f"{size / (1024 * 1024):.1f} MB"
     return f"{size / 1024:.1f} KB"
 
+def clear_upload() -> None:
+    # A new widget key makes Streamlit discard the uploaded file.
+    # reset_for_new_upload(None) then clears phase/result/SHAP on the rerun.
+    st.session_state.uploader_nonce += 1
 
 def render_header() -> None:
     st.markdown(
@@ -498,6 +560,8 @@ def render_preview(uploaded_file: st.runtime.uploaded_file_manager.UploadedFile)
             """,
             unsafe_allow_html=True,
         )
+        with st.container(key="clear_button_wrap"):
+            st.button("Remove image", key="clear_image", on_click=clear_upload)
 
 
 def render_result(result: ClassificationResult) -> None:
@@ -509,10 +573,6 @@ def render_result(result: ClassificationResult) -> None:
             <div class="metric-label">Predicted Class</div>
             <div class="metric-value">{html.escape(result.label)}</div>
             <div class="metric-sub">{html.escape(result.grade)}</div>
-        </div>
-        <div class="accept-banner">
-            <span class="accept-dot"></span>
-            <span>{html.escape(result.status_label)}</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -573,7 +633,9 @@ def main() -> None:
             "Drag and drop copra image here or click to browse",
             type=("jpg", "jpeg", "png"),
             help="Accepts JPG, PNG — max 25 MB",
-            label_visibility="visible",
+            accept_multiple_files=False,                       # one image only
+            key=f"copra_uploader_{st.session_state.uploader_nonce}",
+            label_visibility="collapsed",
         )
 
     signature = (
