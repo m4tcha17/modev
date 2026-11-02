@@ -1,60 +1,78 @@
-# Architecture — Copra Classification Pipeline
+# Architecture — Copra Grade Classification Pipeline
 
-Source of truth: `../process.md`. This doc maps its 9 steps onto modules and describes data flow between them. Hard constraints live in `../CLAUDE.md`, not here.
+Source of truth: `model-development-instructions.md` (build spec, cited as §N) and `model-acceptance-criteria.md` (targets P/M/L/F). This doc maps the spec onto modules and lists where the code does not yet match it. Hard constraints live in `../CLAUDE.md`.
 
 ## Pipeline stages
 
 ```mermaid
 flowchart TD
-    A[copra-dataset.csv + photos/\nid, batch_id, copra_class, path] --> B[Step 2: background-model + GrabCut mask, resize]
-    B --> C[Step 3: GLCM + HSV/LAB + Canny features]
-    C --> D[Step 4a: drop outlier rows\n|z| > 3 or outside 1.5×IQR]
-    D --> E[Step 4b: StratifiedGroupKFold 5\ngrouped by whole sample, stratified by class]
-    E --> F[Step 4c: geometric augmentation\ntraining folds only, class-weighted]
-    F --> G[Step 5: train + Optuna on Macro F1\nLR, RandomForest, XGBoost, LightGBM]
-    G --> H{Step 6: select best ensemble\nmean Macro F1 over 5 folds}
-    H --> I[Step 7: evaluation]
-    H --> J[Step 8: TreeSHAP by feature group]
-    H --> K[Step 9: artifact → Streamlit app]
+    A[copra-dataset.csv + photos/\nid, batch_id = Cube ID, copra_class, path] --> B[§4: background model + GrabCut mask\nlighting normalization, resize]
+    B --> C[§5: GLCM + HSV/LAB + Canny features]
+    C --> D[§6: drop outlier rows\n|z| > 3 or outside 1.5×IQR]
+    D --> E[§7a/§8b: outer StratifiedGroupKFold 5\ngrouped by batch_id, stratified by class]
+    E --> F[inner StratifiedGroupKFold 3\nOptuna on Macro F1, augment inner train only]
+    F --> G[refit on augmented outer train\nscore held-out outer fold]
+    G --> H{§8c: select best of RF / XGB / LGBM\nmean outer-fold Macro F1}
+    H --> I[§11: evaluation + acceptance table]
+    H --> J[§10: TreeSHAP by feature family]
+    H --> K[§12: retune on full data → artifact → Streamlit]
 ```
 
-## Module → step map
+## Module → spec map
 
-| Module | Step | Responsibility |
+| Module | Spec | Responsibility |
 |---|---|---|
-| `dataset.py` | 1 | Class → moisture band map (`docs/classes.md`); load CSV, check columns and `copra_class` ∈ A–F, load RGB photos via `path`; report batches that don't have 4 photos, mix classes, or repeat an `id` |
-| `preprocessing/background.py` | 2 | Default mask: fit the background's lighting gradient from the image border, flag pixels far from it, refine with GrabCut (ADR-008) |
-| `preprocessing/otsu.py` | 2 | Otsu mask (comparison only — fails on real photos), apply mask (crop + zero background), resize |
-| `preprocessing/pipeline.py` | 2 | `preprocess(image, config)`: pick mask method, apply, resize |
-| `features/glcm.py` | 3a | Contrast, homogeneity, energy, entropy at 0/45/90/135° and configured distances |
-| `features/color.py` | 3b | HSV + LAB per-channel mean/std over copra pixels only; hue uses circular mean/std, no percentiles (ADR-009) |
-| `features/edges.py` | 3c | Canny edge density + contour stats |
-| `features/combine.py` | 3 | Concatenate into one feature row per photo; GLCM/Canny measured inside the copra only (`features.exclude_boundary`) |
-| `features/table.py` | 1–3 | Whole dataset → feature table (`id`, `batch_id`, `copra_class`, `mask_fraction`, features); run via `scripts/extract_features.py` |
-| `cleaning.py` | 4a | Flag outlier values (z OR IQR), drop every row holding one; `remove_outlier_photos` judges original rows only and drops a flagged photo with all its transforms |
-| `splitting.py` | 4b | StratifiedGroupKFold(5), stratified by `copra_class`, grouped by `splitting.group_column` (whole sample = `batch_id`, ADR-010), before augmentation |
-| `augmentation.py` | 4c | Rotation/flip only, more copies for smaller classes (ADR-002) |
-| `folds.py` | 4b–4c | `make_folds`: split originals, then per fold pick augmented training copies (multipliers from that fold's class counts); val = originals only. `scripts/prepare_folds.py` runs 4a–4c |
-| `models/*.py` | 5 | LR (standardized, baseline) + RF/XGBoost/LightGBM (unscaled), all class-weighted |
-| `models/tuning.py` | 5 | Optuna on Macro F1, same grouped + stratified folds (ADR-003) |
-| `selection.py` | 6 | Per-fold Macro F1 for all four, pick best ensemble |
-| `evaluation.py` | 7 | Confusion matrix, accuracy, Macro F1, per-class precision/recall |
-| `explainability.py` | 8, 9 | TreeSHAP summed by group (texture/color/edge); per-photo explanation for the app |
-| `artifact.py` | 9 | Bundle selected model + preprocessing/feature config (ADR-005) |
-| `app/streamlit_app.py` | 9 | Upload one photo → class A–F, optional SHAP |
+| `dataset.py` | §3, §6.1 | Grade → moisture band map (`docs/classes.md`); load CSV, check columns and `copra_class` ∈ A–F, load photos via `path`; report cubes without 4 photos, mixed grades, repeated `id` |
+| `preprocessing/background.py` | §4 | Background model + GrabCut mask (ADR-008) |
+| `preprocessing/otsu.py` | §4 | Otsu mask, comparison only (failed on the pilot); apply mask, resize |
+| `preprocessing/lighting.py` | §4 | Scale paper to `reference_grey` after masking (ADR-012) |
+| `preprocessing/pipeline.py` | §4 | `preprocess(image, config)`: mask → lighting → resize; mask method behind one function |
+| `features/glcm.py` | §5a | Contrast, homogeneity, energy, entropy at 0/45/90/135° and configured distances (ADR-006) |
+| `features/color.py` | §5b | HSV + LAB per-channel mean/SD over copra pixels; circular hue stats (ADR-009) |
+| `features/edges.py` | §5c | Canny edge density + contour stats |
+| `features/combine.py` | §5 | One feature row per face image; GLCM/Canny measured inside the copra only |
+| `features/table.py` | §3–§5 | Dataset → feature table (`id`, `batch_id`, `copra_class`, `mask_fraction`, features); `scripts/extract_features.py` |
+| `cleaning.py` | §6.2 | Flag outlier values (z OR IQR), drop every row holding one (ADR-001) |
+| `splitting.py` | §7a | StratifiedGroupKFold by `splitting.group_column` = `batch_id` (ADR-010), before augmentation |
+| `augmentation.py` | §7b | Rotation/flip only, more copies for smaller grades (ADR-002) |
+| `folds.py` | §7 | Split originals, then pick augmented training copies per fold; validation = originals only. `scripts/prepare_folds.py` |
+| `models/*.py` | §8a | LR (standardized, baseline) + RF/XGBoost/LightGBM (unscaled), all class-weighted |
+| `models/tuning.py` | §8b | Optuna on Macro F1 (ADR-003) |
+| `selection.py` | §8c | Per-fold Macro F1 for all four, pick best ensemble |
+| `evaluation.py` | §11 | Confusion matrix, accuracy, Macro F1, per-grade precision/recall |
+| `background_check.py` | §11, L2 | Paper-only classifier before/after normalization; `scripts/background_check.py` |
+| `explainability.py` | §10 | TreeSHAP by family; per-photo explanation for the app |
+| `artifact.py` | §12 | Selected model + preprocessing/feature config (ADR-005) |
+| `app/streamlit_app.py` | §12 | One photo in → grade A–F, optional SHAP (separate, later effort) |
+
+## Known gaps vs. the spec (as of 2026-11-02)
+
+Code that does not yet do what the two source-of-truth files require. Fix before reporting results.
+
+| Gap | Spec | Current state |
+|---|---|---|
+| Tuning not nested | §8b, acceptance §1.3 | `scripts/train_models.py` tunes and scores on the same 5 folds; needs 3 inner folds per outer fold, refit, score outer |
+| Final full-data retune + train | §8b, §12 | Not built |
+| Acceptance thresholds as config + pass/fail table | acceptance §3–§6 | Only `targets.background_check_margin` exists; P1, P2, M1–M4, F1 thresholds and the §6 table are missing |
+| Background check pass mark | acceptance L2 | Code uses chance + margin; spec pass mark is accuracy ≤ 25% (six grades) |
+| Outlier counts per grade | acceptance P3, §6.2 | Total drops reported, not per grade |
+| Duplicate Cube ID resolution across merged exports | §6.1 | Repeated `id` reported; duplicate Cube ID resolution not built |
+| Feature-family ablation | §11, F1 | Not built |
+| Brown-Duvel label check | §9, L1 | Not built (needs a small `class, reading` file) |
+| TreeSHAP, artifact, Streamlit, synthetic data | §10, §12, §15 | `NotImplementedError` stubs |
+| PCA / t-SNE sanity plot | §11 | Not built (optional) |
 
 ## Data flow
 
-1. **Input**: one CSV row per photo; four rows share a `batch_id` and a `copra_class`. `path` resolves against the CSV's directory.
-2. **Masking**: photo → background-model + GrabCut mask → cropped, background-zeroed image → fixed size.
-3. **Features**: one row per photo, carrying `id`, `batch_id`, `copra_class` along.
-4. **Outliers**: drop rows with any outlier value. Report how many rows went.
-5. **Split → augment**: StratifiedGroupKFold first (grouped by whole sample, stratified by class); augmented copies of training-fold photos go through Steps 2–3.
-6. **Train + tune**: all four models, class-weighted, Optuna on Macro F1.
-7. **Select**: best ensemble by mean Macro F1 over 5 folds.
-8. **Evaluate** on held-out folds, per photo.
-9. **Explain** with TreeSHAP; **deploy** the selected model + config.
+1. **Input:** one CSV row per face photo; 4 rows share a `batch_id` (Cube ID) and a `copra_class`.
+2. **Preprocess:** mask → lighting normalization → fixed size.
+3. **Features:** one row per photo, carrying `id`, `batch_id`, `copra_class`.
+4. **Outliers:** drop rows with any outlier value; report drops per grade.
+5. **Nested CV:** outer split → inner split → augment inner training → Optuna → refit on augmented outer training → score outer fold.
+6. **Select:** best ensemble by mean outer-fold Macro F1.
+7. **Evaluate** per image on outer folds; fill in the acceptance table.
+8. **Explain** with TreeSHAP; **retune and train on all data**, serialize the artifact.
 
 ## Placeholder data
 
-`scripts/make_synthetic_dataset.py` (stub) generates a schema-matching dataset (4 photos per `batch_id`, classes A–F) for testing the wiring when real data is thin. The latest real export (2026-10-10) has 576 photos in 144 batches: classes `A` (50 batches), `B` (44) and `D` (50). Classes C, E and F are still being collected. Class D was photographed under different lighting (ADR-011).
+`scripts/make_synthetic_dataset.py` (stub) is meant to generate a schema-matching dataset (4 photos per `batch_id`, grades A–F) to prove the code path when real data is thin (§15).

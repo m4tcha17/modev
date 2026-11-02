@@ -1,7 +1,7 @@
 # ADR-008: Masking Method — Background Model + GrabCut Instead of Otsu
 
-**Status:** adopted 2026-10-04, pending thesis-team confirmation
-**Spec reference:** `process.md` Step 2 ("If Otsu turns out unreliable, fallbacks are adaptive thresholding, an HSV-based mask, or GrabCut. Only switch if Otsu actually fails.")
+**Status:** adopted 2026-10-04; confirmed by `model-development-instructions.md` §4 (background model + GrabCut is the method)
+**Spec reference:** `model-development-instructions.md` §4
 
 ## Otsu failed
 
@@ -18,6 +18,10 @@ On the 2026-10-04 export (136 photos), Otsu's mask covered a median 77% of the f
 Result on the same 136 photos: mask covers 13–37% of the frame, checked by eye on a 24-photo preview sheet. A few masks pick up a thin sliver of cast shadow at one edge.
 
 Also adopted: GLCM and Canny are measured inside the copra only (`features.exclude_boundary: true`). GLCM counts only copra–copra pixel pairs; Canny ignores edges within `boundary_margin_px` (3) of the outline. Before this, the outline cliff inflated GLCM contrast and Canny counted the outline as cracks.
+
+## Bad-mask rule (§4)
+
+A face image whose mask is clearly wrong is retaken if the cube is still available, otherwise excluded. Outlier removal (§6.2) is the later safety net. The mask keeps both white meat and brown skin; skin pixels shifting color averages is a known limitation.
 
 ## Assumptions it relies on
 

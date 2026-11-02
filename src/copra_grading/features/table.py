@@ -27,7 +27,7 @@ from copra_grading.dataset import load_image
 from copra_grading.features import EmptyRegionError
 from copra_grading.features.combine import extract_all_features
 from copra_grading.preprocessing.otsu import apply_mask, resize_masked
-from copra_grading.preprocessing.pipeline import compute_mask
+from copra_grading.preprocessing.pipeline import mask_and_normalize
 
 ID_COLUMNS = ("id", "batch_id", "copra_class")
 META_COLUMNS = ID_COLUMNS + ("augment", "mask_fraction")
@@ -43,7 +43,7 @@ def _photo_rows(
 ) -> tuple[list[dict], dict | None]:
     """(feature rows, None), or ([], skip record) if the photo has no usable copra."""
     image = load_image(csv_path, row["path"])
-    mask = compute_mask(image, config)
+    image, mask = mask_and_normalize(image, config)
     crop = apply_mask(image, mask)
     size = config["preprocessing"]["resize_to"]
     out = []

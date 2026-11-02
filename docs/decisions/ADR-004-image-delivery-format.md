@@ -1,6 +1,6 @@
 # ADR-004: Image File Delivery Format Alongside CSV Export
 
-**Status:** resolved by `process.md` §1 and the 2026-10-04 export
+**Status:** resolved by `model-development-instructions.md` §3 and the 2026-10-04 export (open item §15.3 settled by that export)
 
 ## Decision
 

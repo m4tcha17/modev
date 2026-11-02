@@ -1,7 +1,7 @@
 # ADR-009: Color Features — Mean and Std Only, No Percentiles
 
 **Status:** adopted 2026-10-05
-**Spec reference:** `process.md` Step 3b (HSV/LAB color features); outlier rule in `CLAUDE.md` (drop, never impute, never relax thresholds)
+**Spec reference:** `model-development-instructions.md` §5b (per-channel mean, SD and/or histogram stats); outlier rule §6.2 / `CLAUDE.md` (drop, never impute, never relax thresholds)
 
 ## Context
 

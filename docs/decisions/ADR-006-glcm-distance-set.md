@@ -1,11 +1,11 @@
 # ADR-006: GLCM Distance Set
 
-**Status:** proposed-default, pending thesis-team confirmation
-**Spec reference:** `process.md` Step 3a ("a few pixel distances")
+**Status:** proposed-default, pending thesis-team confirmation (open item §15.5)
+**Spec reference:** `model-development-instructions.md` §5a
 
 ## Default
 
-Distances: **{1, 2, 3} pixels**. Angles: **{0°, 45°, 90°, 135°}** (all four, per process.md). Each distance/angle combination kept as a **separate feature** (not averaged across distances) — a defensible, documented choice per the spec's own framing; this preserves more information for the tree-based models to split on than averaging would.
+Distances: **{1, 2, 3} pixels**. Angles: **{0°, 45°, 90°, 135°}** (all four, per §5a). Each distance/angle combination kept as a **separate feature** (not averaged across distances) — a defensible, documented choice per the spec's own framing; this preserves more information for the tree-based models to split on than averaging would.
 
 ## Rationale
 
@@ -13,7 +13,7 @@ Distances: **{1, 2, 3} pixels**. Angles: **{0°, 45°, 90°, 135°}** (all four,
 
 ## What would change it
 
-If TreeSHAP (Step 8) shows negligible marginal contribution from farther distances (e.g. distance=3 barely used), the set could shrink; if texture signal looks distance-sensitive in ways 1-3px doesn't capture, extend the range.
+If TreeSHAP (§10) shows negligible marginal contribution from farther distances (e.g. distance=3 barely used), the set could shrink; if texture signal looks distance-sensitive in ways 1-3px doesn't capture, extend the range.
 
 ## Owner
 

@@ -1,143 +1,96 @@
-# Process: Copra Classification Model
+# Process: Copra Moisture-Based Grade Classification
 
-How the model is built, from the dataset to a deployed classifier, step by step.
+Short walkthrough of the pipeline. **The governing documents are `docs/model-development-instructions.md` (build spec) and `docs/model-acceptance-criteria.md` (pass/fail targets).** If this file disagrees with them, they win. Section numbers below (§N) refer to the build spec.
 
 ---
 
-## 1. The Dataset
-
-### File structure
+## 1. The Dataset (§3)
 
 ```
 copra-dataset.csv
 photos/
-    <UUID>.jpeg
-    <UUID>.jpeg
+    <id>.jpeg
     ...
 ```
 
-`copra-dataset.csv` and the `photos/` folder sit in the same directory. Each photo is named after its unique `id`.
-
-### Columns in `copra-dataset.csv`
-
 | Column | Meaning |
 | --- | --- |
-| `id` | Unique ID of one photo (one row = one photo). |
-| `batch_id` | ID of one physical copra sample. Each sample is photographed from 4 angles/sides, so all 4 photos of the same sample share the same `batch_id`. |
-| `copra_class` | The label. One of `A`, `B`, `C`, `D`, `E`, `F`. |
-| `path` | Relative file path of the photo, e.g. `photos/<UUID>.jpeg`. |
+| `id` | Unique photo ID (one row = one photo). |
+| `batch_id` | **Cube ID.** Each cube has 4 photos, one per cut meat face, sharing this ID. One copra is cut into 1–3 cubes; which cubes came from which copra was not recorded (no `copra_id`). |
+| `copra_class` | Label `A`–`F`: the owner's pasa grade of the whole copra, inherited by its cubes. Shown as "Grade A" … "Grade F". |
+| `path` | `photos/<id>.jpeg`, relative to the CSV. Image root is configurable. |
 
-Example rows:
+Capture is fixed: 10 cm, no rotation, ISO 100, 1/60 s, WB 6000 K, focus 0.10 m, 4:3 JPEG, mid-grey construction paper, two white lights that dim slowly during a session.
 
-```
-id,batch_id,copra_class,path
-3f2a...,b01,A,photos/3f2a....jpeg
-9c1e...,b01,A,photos/9c1e....jpeg
-7d4b...,b01,A,photos/7d4b....jpeg
-1a8f...,b01,A,photos/1a8f....jpeg
-```
+Minimum size: 50 cubes per grade, 300 cubes and 1,200 raw photos in total. Smallest grade's cube count ≥ 90% of the largest (acceptance P1, P2).
 
-All photos were taken with the same phone, fixed distance (10 cm), same camera settings, on the same mid-grey background. This consistency is what makes the steps below work.
+Grades and moisture bands: see `docs/classes.md`.
 
 ---
 
 ## 2. Pipeline Steps
 
-### Step 1: Load the data
+### Step 1: Load and check (§3, §6.1)
 
-1. Read `copra-dataset.csv`.
-2. Load each image from its `path`.
-3. Keep `batch_id` with every row. It is needed for splitting in Step 4.
+Read the CSV, load photos, keep `batch_id` on every row. Detect and resolve duplicate Cube IDs. Report cube count per grade.
 
-### Step 2: Preprocessing (background removal)
+### Step 2: Preprocessing (§4)
 
-1. Convert the image to grayscale.
-2. Apply **Otsu's thresholding** to get a binary mask that separates the copra from the grey background.
-3. Apply the mask to the original image so only copra pixels remain.
-4. Resize to a fixed size so all images are on the same scale.
+1. **Background model + GrabCut mask** (Otsu failed on the pilot, ADR-008): fit a quadratic surface per LAB channel to the border band, seed copra at > 4 robust SDs, GrabCut 3 iterations, keep the largest component, fill holes. The mask keeps both white meat and brown skin.
+2. **Lighting normalization:** scale each photo so the fitted paper color matches one fixed reference grey (ADR-012).
+3. **Scale normalization:** resize to a fixed pixel scale.
 
-If Otsu turns out unreliable, fallbacks are adaptive thresholding, an HSV-based mask, or GrabCut. Only switch if Otsu actually fails.
+A clearly wrong mask: retake the face if the cube still exists, otherwise exclude it.
 
-### Step 3: Feature extraction
+### Step 3: Feature extraction (§5)
 
-Run on each masked image. Produces one feature vector per photo, made of three feature groups:
+On the masked, normalized image only. All three families always ship; one row per face image:
 
-**a. Texture — GLCM (Gray-Level Co-occurrence Matrix)**
-- Build the GLCM from the grayscale masked image at angles 0°, 45°, 90°, 135° and a few pixel distances.
-- Compute: contrast, homogeneity, energy, entropy.
+- **Texture — GLCM:** contrast, homogeneity, energy, entropy at 0°, 45°, 90°, 135° and distances 1–3 px (ADR-006).
+- **Color — HSV and LAB:** per-channel mean and SD over copra pixels (ADR-009).
+- **Edges — Canny:** edge density and contour stats.
 
-**b. Color — HSV and LAB**
-- Convert the masked image from RGB to HSV and to LAB.
-- Compute per channel: mean, standard deviation (optionally histograms).
-- Only use copra pixels (ignore masked background).
+### Step 4: Outlier removal (§6.2)
 
-**c. Edges — Canny**
-- Run Canny edge detection on the grayscale masked image.
-- Compute edge density (edge pixels ÷ copra pixels) and contour stats.
+On feature values, not images. Outlier if |z| > 3 **or** outside `Q1 − 1.5×IQR` to `Q3 + 1.5×IQR`. A photo with even one outlier value is dropped as a whole row, so no null values are left (ADR-001). Never impute, never relax. Report drops per grade (acceptance P3).
 
-Concatenate a + b + c into one feature vector. Output: a feature table with one row per photo, plus `batch_id` and `copra_class`.
+### Step 5: Nested split, augmentation, tuning (§7, §8b)
 
-### Step 4: Data preparation
+- **Outer:** `StratifiedGroupKFold(5)`, grouped by `batch_id`, stratified by `copra_class`. Reporting only.
+- **Inner:** `StratifiedGroupKFold(3)` inside each outer training portion, same grouping. Optuna scores each trial by mean inner Macro F1.
+- **Augmentation:** rotations and flips only, more copies for smaller grades (ADR-002). Inner training folds during tuning; whole outer training portion when refitting. Never before a split.
+- **Refit** the best trial on the full augmented outer training portion, score once on the held-out outer fold.
 
-**a. Outlier removal**
-- Run on the feature values, not the images.
-- A value is an outlier if |z| > 3 **or** it falls outside the IQR fence (`Q1 − 1.5×IQR` to `Q3 + 1.5×IQR`).
-- Drop flagged values. Do not impute.
-- Never relax the threshold. If too much data is lost, collect more data.
-
-**b. Split with StratifiedGroupKFold (5 folds)**
-- Group by the whole copra sample. Several `batch_id`s can come from the same whole sample, so `batch_id` alone is only safe while each batch is its own sample.
-- Stratify by `copra_class` so every fold has a similar class mix.
-- All 4 photos of one sample always stay in the same fold. Otherwise the model sees one side of a sample in training and another side in testing, which inflates accuracy.
-- Split **before** augmentation.
-
-**c. Augmentation (training folds only)**
-- Rotations and flips only. No brightness, contrast, or color changes (they would corrupt the color features).
-- No SMOTE.
-- Smaller classes get more augmented copies than larger ones.
-- Augmented images go through Steps 2–3 to get their features.
-
-### Step 5: Train the models
-
-Train four classifiers on the training folds:
+### Step 6: Train and compare four models (§8a)
 
 | Model | Role | Scaling |
 | --- | --- | --- |
-| Logistic Regression | Baseline only, never deployed | Standardize features |
+| Logistic Regression | Baseline only, never deployed | Standardized, inside a `Pipeline` |
 | Random Forest | Candidate | None |
 | XGBoost | Candidate | None |
 | LightGBM | Candidate | None |
 
-- All four use **class weighting** to handle class imbalance.
-- Tune hyperparameters with **Optuna**, optimizing **Macro F1** (not accuracy).
-- Tune regularization: max depth and min samples per leaf (Random Forest), max depth and min child weight (XGBoost, LightGBM).
+All four class-weighted natively. No stacking or voting across them.
 
-### Step 6: Select the best model
+### Step 7: Select (§8c)
 
-- Compare all four on Macro F1 across the 5 folds.
-- The best of Random Forest / XGBoost / LightGBM is the selected model.
-- Logistic Regression is only a reference point.
+Best of RF / XGBoost / LightGBM by mean outer-fold Macro F1. Do not re-tune or retrain on the outer folds.
 
-### Step 7: Evaluate
+### Step 8: Evaluate (§11, acceptance §3–§6)
 
-On the held-out folds, report per photo:
-- Confusion matrix
-- Accuracy
-- Macro F1
-- Per-class precision and recall
+Per image, on held-out outer folds: pooled confusion matrix, accuracy, Macro F1 (mean ± SD), per-grade precision and recall, Grade A precision. Plus background-only check before and after normalization, feature-family ablation, optional PCA/t-SNE sanity plot. Fill in the acceptance pass/fail table.
 
-### Step 8: Explainability
+### Step 9: Label check (§9)
 
-- Run **TreeSHAP** on the selected model.
-- Sum feature importance by group: texture (GLCM), color (HSV/LAB), edge (Canny).
-- Result: which kind of feature matters most for classification.
+Six pooled Brown-Duvel readings, one per grade, each checked against its grade's band. Sanity check only, never relabel.
 
-### Step 9: Deployment
+### Step 10: Explainability (§10)
 
-- Save the selected model.
-- Load it in a **Streamlit** web app.
-- User uploads **one** photo, the app runs Steps 2–3 on it, and the model returns a class (A–F).
-- On request, show a SHAP explanation for that photo, grouped by feature type.
+TreeSHAP on the selected model only, aggregated by family (texture / color / edge). Check the top features for a plausible physical explanation.
+
+### Step 11: Final artifact (§8b, §12)
+
+Re-run Optuna for the selected algorithm on the full dataset (grouped 5-fold), train on all data, serialize with its preprocessing and feature config (ADR-005). Expose a per-photo SHAP function for the Streamlit app (one photo in, one grade out).
 
 ---
 
@@ -145,14 +98,14 @@ On the held-out folds, report per photo:
 
 | Step | What | Method |
 | --- | --- | --- |
-| 1 | Load data | CSV + `photos/` |
-| 2 | Background removal | Otsu's thresholding, resize |
+| 1 | Load | CSV + `photos/`, duplicate Cube ID check |
+| 2 | Preprocess | Background model + GrabCut, lighting normalization, resize |
 | 3 | Features | GLCM + HSV/LAB + Canny |
-| 4a | Outliers | Drop if \|z\| > 3 or outside 1.5×IQR |
-| 4b | Split | StratifiedGroupKFold (5), grouped by whole sample, stratified by `copra_class` |
-| 4c | Augmentation | Rotate/flip, training folds only |
-| 5 | Train | LR (baseline), RF, XGBoost, LightGBM; class weights; Optuna on Macro F1 |
-| 6 | Select | Best ensemble on Macro F1 |
-| 7 | Evaluate | Confusion matrix, accuracy, Macro F1, per-class precision/recall |
-| 8 | Explain | TreeSHAP by feature group |
-| 9 | Deploy | Streamlit, one photo in, one class out |
+| 4 | Outliers | Drop if \|z\| > 3 or outside 1.5×IQR |
+| 5 | Split + tune | Nested StratifiedGroupKFold (5 outer / 3 inner) by `batch_id`; geometric augmentation after split; Optuna on Macro F1 |
+| 6 | Train | LR (baseline), RF, XGBoost, LightGBM, all class-weighted |
+| 7 | Select | Best ensemble by mean outer-fold Macro F1 |
+| 8 | Evaluate | Acceptance criteria M1–M4, L2, F1 |
+| 9 | Label check | Pooled Brown-Duvel per grade (L1) |
+| 10 | Explain | TreeSHAP by feature family (F2) |
+| 11 | Artifact | Selected model + config, for Streamlit |

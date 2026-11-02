@@ -29,7 +29,7 @@ import numpy as np
 _WORK_WIDTH = 1020  # downscaled width the mask is computed at
 
 
-def _quadratic_design(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+def quadratic_design(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
     return np.stack([np.ones_like(xs), xs, ys, xs * xs, xs * ys, ys * ys], axis=1)
 
 
@@ -57,25 +57,37 @@ def background_distance(lab: np.ndarray, border_band: int) -> np.ndarray:
     xx /= w
     yy /= h
 
-    border = np.zeros((h, w), dtype=bool)
-    border[:border_band] = border[-border_band:] = True
-    border[:, :border_band] = border[:, -border_band:] = True
+    border = border_band_mask(h, w, border_band)
 
-    design = _quadratic_design(xx[border], yy[border])
-    full_design = _quadratic_design(xx.ravel(), yy.ravel())
+    design = quadratic_design(xx[border], yy[border])
+    full_design = quadratic_design(xx.ravel(), yy.ravel())
 
     score_sq = np.zeros((h, w), dtype=np.float32)
     for c in range(3):
-        values = lab[..., c][border]
-        coef = np.linalg.lstsq(design, values, rcond=None)[0]
-        resid = values - design @ coef
-        mad = 1.4826 * np.median(np.abs(resid))
-        keep = np.abs(resid) < 3 * mad + 1e-6
-        coef = np.linalg.lstsq(design[keep], values[keep], rcond=None)[0]
-        sigma = max(1.4826 * float(np.median(np.abs(values[keep] - design[keep] @ coef))), 1.0)
+        coef, sigma = robust_surface_fit(design, lab[..., c][border])
         surface = (full_design @ coef).reshape(h, w)
         score_sq += ((lab[..., c] - surface) / sigma) ** 2
     return np.sqrt(score_sq)
+
+
+def border_band_mask(h: int, w: int, border_band: int) -> np.ndarray:
+    border = np.zeros((h, w), dtype=bool)
+    border[:border_band] = border[-border_band:] = True
+    border[:, :border_band] = border[:, -border_band:] = True
+    return border
+
+
+def robust_surface_fit(design: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, float]:
+    """Least-squares quadratic surface through `values`, refit once without
+    points more than 3 robust SDs off (specks, a copra corner at the edge).
+    Returns (coefficients, robust residual SD, floored at 1)."""
+    coef = np.linalg.lstsq(design, values, rcond=None)[0]
+    resid = values - design @ coef
+    mad = 1.4826 * np.median(np.abs(resid))
+    keep = np.abs(resid) < 3 * mad + 1e-6
+    coef = np.linalg.lstsq(design[keep], values[keep], rcond=None)[0]
+    sigma = max(1.4826 * float(np.median(np.abs(values[keep] - design[keep] @ coef))), 1.0)
+    return coef, sigma
 
 
 def mask_image_background(

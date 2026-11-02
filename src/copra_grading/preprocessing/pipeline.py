@@ -4,11 +4,16 @@
   - "background_grabcut" (default): background-model + GrabCut, see background.py.
   - "otsu": the original method, kept for comparison. Fails on the real
     photos (see background.py docstring).
+
+`preprocessing.lighting_normalization` (default on) rescales each photo so
+its grey paper matches `preprocessing.reference_grey`, by `lighting_mode` (see lighting.py,
+ADR-012). Applied after masking, before features.
 """
 
 import numpy as np
 
 from copra_grading.preprocessing.background import mask_image_background
+from copra_grading.preprocessing.lighting import normalize
 from copra_grading.preprocessing.otsu import apply_mask, mask_image, resize_masked
 
 
@@ -26,7 +31,18 @@ def compute_mask(image: np.ndarray, config: dict) -> np.ndarray:
     raise ValueError(f"unknown masking_method: {method!r}")
 
 
-def preprocess(image: np.ndarray, config: dict) -> np.ndarray:
-    """RGB photo -> cropped, background-zeroed, fixed-size masked image."""
+def mask_and_normalize(image: np.ndarray, config: dict) -> tuple[np.ndarray, np.ndarray]:
+    """RGB photo -> (lighting-normalized full-frame photo, copra mask).
+    Normalization is skipped when `lighting_normalization` is false."""
+    pre = config["preprocessing"]
     mask = compute_mask(image, config)
+    if pre.get("lighting_normalization", False):
+        image = normalize(image, mask, pre["reference_grey"], pre.get("lighting_mode", "gain"))
+    return image, mask
+
+
+def preprocess(image: np.ndarray, config: dict) -> np.ndarray:
+    """RGB photo -> cropped, background-zeroed, lighting-normalized,
+    fixed-size masked image."""
+    image, mask = mask_and_normalize(image, config)
     return resize_masked(apply_mask(image, mask), config["preprocessing"]["resize_to"])

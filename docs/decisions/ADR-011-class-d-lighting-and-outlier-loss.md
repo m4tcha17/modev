@@ -1,6 +1,6 @@
 # ADR-011: Class D Lighting and Outlier Loss on the 2026-10-10 Export
 
-**Status:** adopted 2026-10-11
+**Status:** adopted 2026-10-11. Follow-up: ADR-012 (lighting normalization, background-only check)
 **Spec reference:** `CLAUDE.md` (outliers dropped, never relaxed, "collect more data" if too much is lost); `process.md` Steps 4a–4b
 
 ## Context

@@ -1,4 +1,4 @@
-# Default pipeline configuration. Source of truth: process.md.
+# Default pipeline configuration. Source of truth: docs/model-development-instructions.md + docs/model-acceptance-criteria.md.
 # Values marked "(ADR-00N)" are defaults pending confirmation — see docs/decisions/.
 
 data:
@@ -12,6 +12,11 @@ preprocessing:
   background_threshold_k: 4.0 # copra seed = > k robust SDs from the fitted background
   grabcut_iters: 3
   resize_to: [512, 512] # (width, height) after masking
+  # Rescale each photo so its grey paper (fitted surface, under the copra)
+  # matches reference_grey. Corrects light dimming over a session (ADR-012).
+  lighting_normalization: true
+  lighting_mode: "gain" # gain | flat_field (ADR-012)
+  reference_grey: [117, 125, 124] # RGB; median paper color of the 2026-10-31 export (ADR-012)
 
 features:
   glcm:
@@ -35,8 +40,7 @@ cleaning:
 splitting:
   method: "stratified_group_kfold"
   n_splits: 5
-  # Must identify the whole copra sample. One batch_id = one whole sample
-  # (4 photos, one per side) - see ADR-010.
+  # batch_id = Cube ID (4 face photos). No copra_id exists - see ADR-010.
   group_column: "batch_id"
   label_column: "copra_class" # stratify so each fold's A-F mix matches the dataset
   random_state: 42
@@ -47,6 +51,11 @@ augmentation:
   base_copies: 1 # extra copies per photo for the largest class (ADR-002)
   max_multiplier: 4
   geometric_only: true
+
+targets:
+  # Acceptance L2: background-only accuracy above 25% (six grades) = lighting leakage.
+  # Code still uses chance + margin (0.17 + 0.08 = 0.25 only with six grades) - see ADR-012.
+  background_check_margin: 0.08
 
 tuning:
   n_trials: 75 # per model (ADR-003)

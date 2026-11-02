@@ -1,28 +1,51 @@
-# Copra Classification — Project Rules
+# Copra Moisture-Based Grade Classification — Project Rules
 
-Build spec: `process.md`. Architecture detail: `docs/architecture.md`. Open parameters: `docs/decisions/`. This file holds only the hard, stable constraints — read the other two for everything else.
+## Source of truth — follow strictly
 
-## Non-negotiable constraints
+Two files govern this repository. Follow them exactly; they override every other doc here (`process.md`, `goal.md`, `README.md`, `docs/architecture.md`, `docs/classes.md`, `docs/decisions/`) and any default behaviour.
 
-- **Classification only.** Six classes, `A`–`F`, read directly from the `copra_class` CSV column. Each stands for a moisture band (F < 6% < A < 9 < B < 12 < C < 15 < D < 18% ≤ E; see `docs/classes.md`) — letters are not in moisture order. Never derive labels from anything else, never build a price/discount regression head or output.
-- **No end-to-end CNN / deep-learning image model.** Handcrafted features (GLCM + HSV/LAB + Canny) feeding tree ensembles is the deliberate architecture, not a placeholder for one.
-- **No meta-ensemble/stacking** across Random Forest, XGBoost, LightGBM. They are compared against each other and against a Logistic Regression baseline — never blended into one model.
-- **No SMOTE or synthetic interpolation** for class balance. Class balance correction is class weighting (model-level, all four models) + geometric augmentation (data-level) only.
-- **No photometric augmentation** (brightness/contrast/color/hue shifts), ever — it corrupts the HSV/LAB color features. Augmentation is geometric only (rotation, flip), training folds only.
-- **Outliers are dropped, never imputed, thresholds never relaxed.** A feature value is an outlier if |z| > 3 or outside the 1.5×IQR fence; any photo row with one is dropped. If too much data is lost, collect more data.
+1. **`docs/model-development-instructions.md`** — the build spec: *what* to build and *why*.
+2. **`docs/model-acceptance-criteria.md`** — the pass/fail targets (P1–P4, M1–M4, L1–L2, F1–F2) and the results report format.
 
-## Hard ordering constraint
+Rules for using them:
 
-**Split before augment, never the reverse.** StratifiedGroupKFold (5 folds, stratified by `copra_class`) must run before any augmented copies are generated. Group by the **whole copra sample**: every photo of it and every augmented variant stays in the same fold. One `batch_id` is one whole sample (its 4 side photos), so `splitting.group_column` is `batch_id` (ADR-010). If a sample ever spans several `batch_id`s, add a whole-sample ID column and group by that instead. Splitting after augmentation, or with the wrong grouping, puts part of a sample in training and part in testing and silently inflates scores.
+- Read both before any design call. If another doc disagrees with them, the two files win; update the other doc.
+- If the two files disagree with **each other**, do not pick one. Flag it to the user (thesis team).
+- Open items (instructions §15) are configurable defaults pending confirmation. Never present them as settled. ADRs in `docs/decisions/` record the defaults chosen.
+- Targets are fixed. Never lower, round, or reinterpret one after seeing results. Never re-tune, retrain, or change features to push a metric over its target. Report the miss and the confused grades.
+
+## Non-negotiable constraints (summary of the two files)
+
+- **Classification only.** Six classes, `A`–`F`, read directly from the `copra_class` CSV column (the owner's pasa grade). Displayed as "Grade A" … "Grade F". Moisture bands: F < 6% ≤ A < 9% ≤ B < 12% ≤ C < 15% ≤ D < 18% ≤ E; a boundary value belongs to the higher grade (`docs/classes.md`). Never derive labels from a moisture reading. Never build a price/discount or regression head.
+- **No other grade names** anywhere (no "Resecada", "Bodega", "Semi-Resecada", "Corriente", "Non-Merchantable", PCA "Class 1/2/3").
+- **No end-to-end CNN / deep-learning image model.** Handcrafted features (GLCM + HSV/LAB + Canny) feeding tree ensembles is the deliberate architecture.
+- **No meta-ensemble/stacking/voting** across Random Forest, XGBoost, LightGBM. Compared against each other and a Logistic Regression baseline, never blended.
+- **No SMOTE or synthetic interpolation.** Class balance = native class weighting (all four models, LR included) + geometric augmentation.
+- **No photometric augmentation** (brightness/contrast/color/hue), ever. Geometric only (rotation, flip), training portions only.
+- **Outliers are dropped, never imputed, thresholds never relaxed.** |z| > 3 or outside the 1.5×IQR fence. A photo with even one outlier value is dropped as a whole row, so no null values remain (decided 2026-11-02, ADR-001). If too much data is lost, collect more data.
+- **Preprocessing:** background model + GrabCut mask (Otsu failed), then lighting normalization to a fixed reference grey, then scale normalization. Features come only from the masked, normalized image.
+- **No external datasets merged in**, no model-vs-meter agreement rate, no per-sample Brown-Duvel spot check.
+
+## Hard ordering constraint — split before augment
+
+Nested `StratifiedGroupKFold`, grouped by **`batch_id` (the Cube ID)**, stratified by `copra_class`:
+
+- **Outer:** 5 folds, used only for reporting. Optuna never sees the held-out outer fold.
+- **Inner:** 3 folds inside each outer training portion, for Optuna (mean inner Macro F1 per trial).
+- Augment only inner training folds during tuning, and the whole outer training portion when refitting. Never augment before a split, at either level. LR standardization is fit on training data only (in a `Pipeline`).
+- A cube's 4 face photos and all their augmented variants stay in one fold. No Cube ID may appear in both training and test of any fold (acceptance P4).
+- There is no `copra_id`: cubes of the same copra can land in different folds. State this as a source of optimism in results.
 
 ## Selection and deployment
 
-All four models are compared on Macro F1 across the 5 folds. The best of Random Forest / XGBoost / LightGBM is the selected model and is what gets deployed. Logistic Regression is a reference point only, never deployed. Deployment is a Streamlit app: one photo in, one class (A–F) out, optional per-photo SHAP grouped by feature type.
+- Selected model = best of RF / XGBoost / LightGBM by mean outer-fold Macro F1. Logistic Regression is a baseline, never deployed.
+- Only outer-fold, per-image scores count for acceptance. Inner-fold and training scores never do.
+- Final artifact: re-run Optuna for the selected algorithm on the full dataset (grouped 5-fold), train on all data, serialize with its preprocessing/feature config. Streamlit app: one face photo in, one grade (A–F) out, optional per-photo TreeSHAP grouped by feature family.
 
 ## Git
 
 **Never `git commit`.** Stage changes if useful, but leave committing to the user — commits in this repo are done manually, always.
 
-## Everything else
+## Other docs
 
-Feature families, tuning targets, evaluation metrics, serialization format, and open parameters live in `docs/architecture.md` and `docs/decisions/`. Consult those, and `process.md` itself, before making a design call not covered above.
+`process.md` (short walkthrough), `docs/architecture.md` (module map + known gaps vs. the spec), `docs/classes.md`, `docs/decisions/` (ADRs for open parameters), `goal.md` (earlier targets T1–T8, superseded by the acceptance criteria). All are subordinate to the two source-of-truth files.

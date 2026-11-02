@@ -1,33 +1,43 @@
 # ADR-003: Optuna Search Space and Trial Budget
 
-**Status:** proposed-default, pending thesis-team confirmation
-**Spec reference:** `process.md` Step 5
+**Status:** proposed-default, pending thesis-team confirmation (open item §15.2). Nested structure is fixed by the spec (decided 2026-10-14).
+**Spec reference:** `model-development-instructions.md` §8b; acceptance §1.3
 
-## Default
+## Fixed by the spec (not open)
 
-Trial budget: 50-100 trials per model, given a post-augmentation dataset in the low hundreds to low thousands of rows — enough to explore the space without excessive compute for a two-person team.
+- Objective: **Macro F1**, never raw accuracy.
+- **Nested CV.** Outer: the 5 `StratifiedGroupKFold` folds (grouped by `batch_id`, stratified by `copra_class`), reporting only; Optuna never sees the held-out outer fold. Inner: `StratifiedGroupKFold(n_splits=3)` inside each outer training portion, same grouping; each trial scored by mean inner Macro F1.
+- Augmentation only on inner training folds during tuning, and on the whole outer training portion when refitting. LR standardization inside a `Pipeline`, fit on training data only.
+- Per outer fold: refit the best trial on the augmented outer training portion, score once on the outer fold. Report each outer fold's chosen hyperparameters.
+- Final model: rerun Optuna for the selected algorithm on the full dataset (grouped 5-fold), then train on all data.
+
+## Default (open part)
+
+Trial budget: **75 trials per model** (`tuning.n_trials`), per outer fold under nested CV. The dataset is a few thousand rows after augmentation, so a modest budget is enough.
 
 Search spaces (starting points, `models/tuning.py`):
 
 | Model | Parameters |
 |---|---|
-| Logistic Regression | `C` (log-uniform, 1e-3 to 1e2), `penalty` (`l1`/`l2`) |
+| Logistic Regression | `C` (log-uniform, 1e-3 to 1e2), L1/L2 via `l1_ratio` |
 | Random Forest | `n_estimators` (100-500), `max_depth` (3-20), `min_samples_leaf` (1-10), `max_features` (`sqrt`/`log2`/None) |
 | XGBoost | `n_estimators` (100-500), `max_depth` (3-10), `learning_rate` (log-uniform, 1e-3 to 3e-1), `min_child_weight` (1-10), `subsample`/`colsample_bytree` (0.5-1.0), `reg_alpha`/`reg_lambda` (log-uniform, 1e-3 to 10) |
 | LightGBM | `n_estimators` (100-500), `num_leaves` (7-127), `learning_rate` (log-uniform, 1e-3 to 3e-1), `min_child_samples` (5-50), `subsample`/`colsample_bytree` (0.5-1.0), `reg_alpha`/`reg_lambda` (log-uniform, 1e-3 to 10) |
 
-Objective: Macro F1, never raw accuracy. `process.md` requires regularization tuning: `max_depth` + `min_samples_leaf` (RF), `max_depth` + `min_child_weight` (XGBoost, LightGBM) — LightGBM's `min_child_weight` should join or replace `min_child_samples` above, and LightGBM needs an explicit `max_depth` range (e.g. 3-12) alongside `num_leaves`.
+These are this repo's choices, not decisions the thesis team made. Check `models/tuning.py` for the exact current ranges.
 
-Tuning CV must group by `batch_id`, same as the evaluation split.
+## Current gap
+
+`scripts/train_models.py` tunes and scores on the same 5 folds (not nested). Results from it are not valid for acceptance until nested tuning is built.
 
 ## Rationale
 
-Small dataset means small search spaces and modest trial budgets are appropriate; overly wide spaces or thousands of trials risk overfitting the *hyperparameter search itself* to a small validation fold.
+Small dataset means small search spaces and modest budgets; wide spaces or thousands of trials risk overfitting the search to small inner folds.
 
 ## What would change it
 
-If cross-validated variance across Optuna trials looks unstable, widen the budget; if a model's tuned params consistently land at a search-space boundary, widen that specific range.
+Unstable chosen hyperparameters across outer folds: widen the budget. Tuned params repeatedly at a range boundary: widen that range. Never change the search to push a metric over an acceptance target.
 
 ## Owner
 
-Thesis team (methodology decision), can be revisited by the implementing session based on observed tuning behavior.
+Thesis team; the implementing session may revisit based on observed tuning behaviour.
