@@ -13,6 +13,7 @@ import html
 import time
 from io import BytesIO
 from PIL import Image, UnidentifiedImageError
+from functions import process_image
 
 # MOCK DATA
 @dataclass(frozen=True)
