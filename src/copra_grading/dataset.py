@@ -60,6 +60,48 @@ def load_dataset(csv_path: Path) -> pd.DataFrame:
     return df
 
 
+def drop_excluded(df: pd.DataFrame, exclusions_path: Path | None) -> tuple[pd.DataFrame, list[str]]:
+    """Drop photos listed in the mask-exclusion CSV (columns: id, reason).
+
+    REQ-4.1-7: a photo whose mask is clearly wrong on inspection is excluded
+    unless retaken. A missing file means no exclusions. Raises ValueError on
+    an id that is not in `df`, so a typo cannot silently exclude nothing.
+    Run after assert_clean: the batch check counts every exported photo.
+    """
+    if exclusions_path is None or not Path(exclusions_path).exists():
+        return df, []
+    excluded = pd.read_csv(exclusions_path, dtype={"id": str})["id"].dropna().tolist()
+    unknown = sorted(set(excluded) - set(df["id"]))
+    if unknown:
+        raise ValueError(f"mask exclusions not in the dataset: {unknown}")
+    return df[~df["id"].isin(excluded)].reset_index(drop=True), excluded
+
+
+def balance_cubes(df: pd.DataFrame, min_ratio: float, seed: int) -> tuple[pd.DataFrame, dict[str, list[str]]]:
+    """Trim over-represented grades so the smallest grade's cube count is at
+    least `min_ratio` of every other grade's (thesis 4.1.3, ADR-014).
+
+    Whole batches (cubes) are dropped, never single photos, so every kept
+    cube keeps its four faces. Which cubes go is a seeded random draw over
+    the sorted batch ids, so the same export and seed always drop the same
+    cubes. Returns the kept rows and {class: dropped batch_ids}.
+    """
+    counts = df.groupby("copra_class")["batch_id"].nunique()
+    # Largest n with counts.min() >= min_ratio * n; the epsilon absorbs float
+    # error (99 / 0.9 is 110.00000000000001, 90 / 0.9 can land just under 100).
+    cap = int(np.floor(counts.min() / min_ratio + 1e-9))
+    rng = np.random.default_rng(seed)
+    dropped: dict[str, list[str]] = {}
+    for cls in sorted(counts.index):
+        if counts[cls] <= cap:
+            continue
+        batches = sorted(df.loc[df["copra_class"] == cls, "batch_id"].unique())
+        drop = rng.choice(batches, size=len(batches) - cap, replace=False)
+        dropped[cls] = sorted(drop.tolist())
+    gone = [b for bs in dropped.values() for b in bs]
+    return df[~df["batch_id"].isin(gone)].reset_index(drop=True), dropped
+
+
 def load_image(csv_path: Path, relative_path: str) -> np.ndarray:
     """Load one photo as an (H, W, 3) RGB uint8 array.
 

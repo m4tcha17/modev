@@ -10,6 +10,8 @@ CONFIG = {
     "augmentation": {"base_copies": 1, "max_multiplier": 4},
     "tuning": {"n_trials": 2, "inner_n_splits": 3, "random_state": 42,
                "objective_metric": "f1_macro"},
+    "evaluation": {"pass_marks": {"macro_f1": 0.75, "macro_f1_stretch": 0.80, "min_class_recall": 0.60,
+                                  "precision_class": "A", "class_precision": 0.85}},
 }
 
 

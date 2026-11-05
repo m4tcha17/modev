@@ -54,9 +54,12 @@ All photos were taken with the same phone, fixed distance (10 cm), same camera s
 1. Convert the image to grayscale.
 2. Apply **Otsu's thresholding** to get a binary mask that separates the copra from the grey background.
 3. Apply the mask to the original image so only copra pixels remain.
-4. Resize to a fixed size so all images are on the same scale.
+4. Normalize lighting against the grey paper: measure the paper's average color from a surface fitted to the photo's border band, and scale the photo per RGB channel so the paper matches one fixed reference grey (ADR-013). This is one deterministic correction applied to every photo, at training and inference, not augmentation.
+5. Resize to a fixed size so all images are on the same scale.
 
-If Otsu turns out unreliable, fallbacks are adaptive thresholding, an HSV-based mask, or GrabCut. Only switch if Otsu actually fails.
+If Otsu turns out unreliable, fallbacks are adaptive thresholding, an HSV-based mask, or GrabCut. Only switch if Otsu actually fails. (It did: the default mask is a background model + GrabCut, ADR-008.)
+
+A photo whose mask is clearly wrong on inspection is excluded (listed in `configs/mask_exclusions.csv`) unless it can be retaken.
 
 ### Step 3: Feature extraction
 
@@ -117,6 +120,7 @@ Train four classifiers on the training folds:
 - Compare all four on Macro F1 across the 5 folds.
 - The best of Random Forest / XGBoost / LightGBM is the selected model.
 - Logistic Regression is only a reference point.
+- After selection, re-tune the selected model on the full dataset (grouped 5-fold) and train it on all photos plus augmented copies. That model is the deployed one; its reported score stays the nested-CV estimate.
 
 ### Step 7: Evaluate
 
@@ -126,6 +130,12 @@ On the held-out folds, report per photo:
 - Macro F1
 - Per-class precision and recall
 
+Then check the team's pass marks, reporting every miss with its value (never tuning to pass): mean Macro F1 ≥ 0.75 (stretch 0.80), every class's mean recall ≥ 0.60, class A precision ≥ 0.85, best ensemble beats Logistic Regression by more than one outer-fold SD.
+
+Two further checks (ADR-013):
+- **Background-only lighting check.** Predict the class from paper-only pixels, before and after normalization. Near chance means lighting does not reveal the class; above 25% is investigated as leakage.
+- **Feature-family ablation.** Rerun the same nested CV on GLCM-only, color-only and edge-only features. The combined set must score no lower than the best single family.
+
 ### Step 8: Explainability
 
 - Run **TreeSHAP** on the selected model.
@@ -134,7 +144,7 @@ On the held-out folds, report per photo:
 
 ### Step 9: Deployment
 
-- Save the selected model.
+- Save the selected model (the full-data refit from Step 6).
 - Load it in a **Streamlit** web app.
 - User uploads **one** photo, the app runs Steps 2–3 on it, and the model returns a class (A–F).
 - On request, show a SHAP explanation for that photo, grouped by feature type.
@@ -146,13 +156,13 @@ On the held-out folds, report per photo:
 | Step | What | Method |
 | --- | --- | --- |
 | 1 | Load data | CSV + `photos/` |
-| 2 | Background removal | Otsu's thresholding, resize |
+| 2 | Background removal | Background model + GrabCut (ADR-008), grey-paper lighting normalization, resize |
 | 3 | Features | GLCM + HSV/LAB + Canny |
 | 4a | Outliers | Drop if \|z\| > 3 or outside 1.5×IQR |
 | 4b | Split | StratifiedGroupKFold (5), grouped by whole sample, stratified by `copra_class` |
 | 4c | Augmentation | Rotate/flip, training folds only |
 | 5 | Train | LR (baseline), RF, XGBoost, LightGBM; class weights; Optuna on Macro F1 |
-| 6 | Select | Best ensemble on Macro F1 |
-| 7 | Evaluate | Confusion matrix, accuracy, Macro F1, per-class precision/recall |
+| 6 | Select | Best ensemble on Macro F1, then full-data retune + refit |
+| 7 | Evaluate | Confusion matrix, accuracy, Macro F1, per-class precision/recall; pass marks; lighting check; feature-family ablation |
 | 8 | Explain | TreeSHAP by feature group |
 | 9 | Deploy | Streamlit, one photo in, one class out |

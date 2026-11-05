@@ -23,10 +23,10 @@ from copra_grading.models import fit_model, suggest_params
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-def inner_config(config: dict) -> dict:
-    """Copy of config with the inner split count."""
+def inner_config(config: dict, n_splits: int | None = None) -> dict:
+    """Copy of config with the inner split count (`n_splits` overrides it)."""
     inner = copy.deepcopy(config)
-    inner["splitting"]["n_splits"] = config["tuning"]["inner_n_splits"]
+    inner["splitting"]["n_splits"] = n_splits or config["tuning"]["inner_n_splits"]
     return inner
 
 
@@ -36,13 +36,15 @@ def tune_model(
     config: dict,
     n_trials: int,
     seed: int,
+    n_splits: int | None = None,
 ) -> optuna.Study:
     """Run an Optuna study for the named model, maximising mean Macro F1
     over grouped + stratified inner folds of `table` (never ungrouped CV -
-    leaks parts of one whole sample)."""
+    leaks parts of one whole sample). `n_splits` overrides
+    tuning.inner_n_splits (the final full-data retune uses 5)."""
     label = config["splitting"]["label_column"]
     features = feature_columns(table)
-    inner_folds = make_folds(table, inner_config(config))
+    inner_folds = make_folds(table, inner_config(config, n_splits))
 
     def objective(trial: optuna.Trial) -> float:
         params = suggest_params(model_name, trial)

@@ -48,34 +48,73 @@ def _fill_holes(binary: np.ndarray) -> np.ndarray:
     return filled
 
 
-def background_distance(lab: np.ndarray, border_band: int) -> np.ndarray:
-    """Per-pixel distance from the fitted background surface, in robust
-    standard deviations of the border band (combined over L, a, b).
+def border_band_mask(shape: tuple[int, int], border_band: int) -> np.ndarray:
+    """Boolean (H, W) mask of the frame's outer band, assumed to be paper."""
+    border = np.zeros(shape, dtype=bool)
+    border[:border_band] = border[-border_band:] = True
+    border[:, :border_band] = border[:, -border_band:] = True
+    return border
+
+
+def fit_border_surfaces(image: np.ndarray, border_band: int) -> tuple[np.ndarray, np.ndarray]:
+    """Fit a quadratic surface per channel to the border band, with one
+    robust refit that drops border outliers.
+
+    Returns (surfaces, sigmas): surfaces is (H, W, C) float32, sigmas the
+    per-channel robust spread of the border around its surface (at least 1).
     """
-    h, w = lab.shape[:2]
+    h, w = image.shape[:2]
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     xx /= w
     yy /= h
 
-    border = np.zeros((h, w), dtype=bool)
-    border[:border_band] = border[-border_band:] = True
-    border[:, :border_band] = border[:, -border_band:] = True
-
+    border = border_band_mask((h, w), border_band)
     design = _quadratic_design(xx[border], yy[border])
     full_design = _quadratic_design(xx.ravel(), yy.ravel())
 
-    score_sq = np.zeros((h, w), dtype=np.float32)
-    for c in range(3):
-        values = lab[..., c][border]
+    channels = image.shape[2]
+    surfaces = np.empty((h, w, channels), dtype=np.float32)
+    sigmas = np.empty(channels, dtype=np.float32)
+    for c in range(channels):
+        values = image[..., c][border].astype(np.float32)
         coef = np.linalg.lstsq(design, values, rcond=None)[0]
         resid = values - design @ coef
         mad = 1.4826 * np.median(np.abs(resid))
         keep = np.abs(resid) < 3 * mad + 1e-6
         coef = np.linalg.lstsq(design[keep], values[keep], rcond=None)[0]
-        sigma = max(1.4826 * float(np.median(np.abs(values[keep] - design[keep] @ coef))), 1.0)
-        surface = (full_design @ coef).reshape(h, w)
-        score_sq += ((lab[..., c] - surface) / sigma) ** 2
-    return np.sqrt(score_sq)
+        sigmas[c] = max(1.4826 * float(np.median(np.abs(values[keep] - design[keep] @ coef))), 1.0)
+        surfaces[..., c] = (full_design @ coef).reshape(h, w)
+    return surfaces, sigmas
+
+
+def background_distance(lab: np.ndarray, border_band: int) -> np.ndarray:
+    """Per-pixel distance from the fitted background surface, in robust
+    standard deviations of the border band (combined over L, a, b).
+    """
+    surfaces, sigmas = fit_border_surfaces(lab, border_band)
+    return np.sqrt((((lab - surfaces) / sigmas) ** 2).sum(axis=-1))
+
+
+def working_copy(image: np.ndarray) -> tuple[np.ndarray, int]:
+    """Downscaled copy the background is modelled on, and its border band width."""
+    h0, w0 = image.shape[:2]
+    work_w = min(_WORK_WIDTH, w0)
+    work_h = max(1, round(h0 * work_w / w0))
+    small = cv2.resize(image, (work_w, work_h), interpolation=cv2.INTER_AREA)
+    return small, max(2, round(25 * work_w / _WORK_WIDTH))
+
+
+def paper_color(image: np.ndarray) -> np.ndarray:
+    """Average RGB color of the grey paper, from a surface fitted to the
+    border band. `image` is (H, W, 3) RGB uint8. Returns float (3,).
+
+    The surface, not the raw border pixels, is averaged: it covers the whole
+    frame (including under the copra) and its robust refit ignores specks.
+    """
+    small, border_band = working_copy(image)
+    blurred = cv2.GaussianBlur(small, (5, 5), 0)
+    surfaces, _ = fit_border_surfaces(blurred, border_band)
+    return surfaces.reshape(-1, 3).mean(axis=0).astype(np.float64)
 
 
 def mask_image_background(
@@ -88,13 +127,10 @@ def mask_image_background(
     if image.ndim != 3:
         raise ValueError(f"mask_image_background expects an RGB image, got shape {image.shape}")
     h0, w0 = image.shape[:2]
-    work_w = min(_WORK_WIDTH, w0)
-    work_h = max(1, round(h0 * work_w / w0))
-    small = cv2.resize(image, (work_w, work_h), interpolation=cv2.INTER_AREA)
+    small, border_band = working_copy(image)
 
     # Morphology sizes scale with the working width (tuned at 1020 px).
-    unit = work_w / _WORK_WIDTH
-    border_band = max(2, round(25 * unit))
+    unit = small.shape[1] / _WORK_WIDTH
     open_k = max(3, round(5 * unit) | 1)
     seed_k = max(3, round(15 * unit) | 1)
 
@@ -118,6 +154,10 @@ def mask_image_background(
         if (gc == cv2.GC_FGD).any() or (gc == cv2.GC_PR_FGD).any():
             bgd_model = np.zeros((1, 65), np.float64)
             fgd_model = np.zeros((1, 65), np.float64)
+            # GrabCut's k-means init draws from OpenCV's global RNG, whose
+            # state depends on earlier calls in the process; reseed so the
+            # same photo always gets the same mask.
+            cv2.setRNGSeed(0)
             cv2.grabCut(small, gc, None, bgd_model, fgd_model, grabcut_iters, cv2.GC_INIT_WITH_MASK)
             seeds = _largest_component(np.isin(gc, (cv2.GC_FGD, cv2.GC_PR_FGD)))
 

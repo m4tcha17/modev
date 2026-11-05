@@ -36,3 +36,10 @@ def test_metrics_name_pooled_and_mean_fold_macro_f1_apart(tmp_path, feature_tabl
     # the per-fold mean is the selection criterion and must match selection.json
     assert m["mean_fold_macro_f1"] == selection["mean_macro_f1"]["random_forest"]
 
+
+
+def test_pass_marks_written_for_the_selected_model(tmp_path, feature_table, config):
+    out = _run(tmp_path, feature_table, config)
+    marks = json.loads((out / "pass_marks.json").read_text())
+    assert marks["selected"] == "random_forest"
+    assert {"macro_f1", "min_class_recall", "class_A_precision"} <= set(marks["checks"])

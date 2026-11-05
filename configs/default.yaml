@@ -4,6 +4,14 @@
 data:
   # copra-dataset.csv + photos/ in the same directory; `path` column resolves against it
   csv_path: "dataset/copra-dataset.csv"
+  # Photo ids whose mask was judged clearly wrong by eye and could not be
+  # retaken (REQ-4.1-7, ADR-013 item 9). Dropped before feature extraction.
+  mask_exclusions: "configs/mask_exclusions.csv"
+  # Smallest grade's cube count must be at least this share of every other
+  # grade's (thesis 4.1.3). Over-cap grades lose randomly drawn whole cubes
+  # (seeded) before feature extraction - ADR-014.
+  min_grade_ratio: 0.9
+  balance_seed: 42
 
 preprocessing:
   # background_grabcut | otsu. Otsu fails on the real photos (grey background
@@ -12,6 +20,12 @@ preprocessing:
   background_threshold_k: 4.0 # copra seed = > k robust SDs from the fitted background
   grabcut_iters: 3
   resize_to: [512, 512] # (width, height) after masking
+  # Scale each photo so its grey paper matches this neutral RGB grey before
+  # features are extracted (REQ-4.1-6, ADR-013 item 1). 110 keeps the
+  # darkest-lit photos from clipping their white meat at 255.
+  lighting_normalization:
+    enabled: true
+    reference_grey: 110
 
 features:
   glcm:
@@ -56,5 +70,20 @@ tuning:
   inner_n_splits: 3
   random_state: 42
 
+evaluation:
+  # Pass marks set by the thesis team before training (thesis section 4.10,
+  # ADR-013 item 4). A miss is reported with its value, never tuned away.
+  pass_marks:
+    macro_f1: 0.75 # mean over the 5 outer folds, selected model
+    macro_f1_stretch: 0.80
+    min_class_recall: 0.60 # every class's mean outer-fold recall
+    precision_class: "A" # a false A on wet copra is the costly error
+    class_precision: 0.85
+    # plus: selected ensemble beats Logistic Regression by > 1 outer-fold SD
+  # Background-only lighting check (REQ-4.1-8, ADR-013 item 2): accuracy of
+  # a classifier on paper-only pixels above this is investigated as leakage.
+  lighting_leak_accuracy: 0.25
+
 artifact:
+  path: "models/selected"
   serialization: "native" # joblib for sklearn-compatible, native save for xgboost/lightgbm (ADR-005)

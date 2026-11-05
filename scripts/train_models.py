@@ -1,6 +1,7 @@
 """Run Steps 5-7 on the cleaned feature table from prepare_folds.py:
 nested-CV tuning and training of all four models, selection of the best
-ensemble, and per-photo metrics on the held-out folds.
+ensemble, per-photo metrics on the held-out folds, and the thesis pass
+marks (pass_marks.json, ADR-013 item 4).
 
 Usage:
   uv run python scripts/train_models.py                        # all models, config trials
@@ -14,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from copra_grading.evaluation import compute_metrics
+from copra_grading.evaluation import check_pass_marks, compute_metrics
 from copra_grading.features.table import ID_COLUMNS
 from copra_grading.models import MODEL_NAMES
 from copra_grading.selection import ENSEMBLE_CANDIDATES, cross_validate_models, select_model
@@ -64,6 +65,11 @@ def main() -> None:
             {"selected": selected, "mean_macro_f1": summary["mean"].round(4).to_dict()}, indent=2
         ))
         print(f"selected: {selected}")
+        marks = check_pass_marks(result.predictions, result.scores, selected,
+                                 config["evaluation"]["pass_marks"], label)
+        (args.out / "pass_marks.json").write_text(json.dumps(marks, indent=2))
+        for name, check in marks["checks"].items():
+            print(f"  {'PASS' if check['passed'] else 'MISS'} {name}: {check['value']} (target {check['target']})")
     print(f"results -> {args.out}")
 
 

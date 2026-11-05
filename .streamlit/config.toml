@@ -1,0 +1,3 @@
+[server]
+# SRS section 5.3: cap uploads (MB). inference.decode_upload checks it again.
+maxUploadSize = 25

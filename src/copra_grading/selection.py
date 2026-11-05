@@ -7,6 +7,11 @@ Logistic Regression is a reference point only, never selectable.
 Nested CV: for each outer fold, every model is tuned on that fold's training
 photos only (tuning.tune_model), refitted on the fold's augmented training
 rows with the best params, and scored on the fold's validation originals.
+
+After selection, fit_final_model re-tunes the selected model on the full
+dataset (grouped 5-fold) and trains it on every photo plus its augmented
+copies. That model is the deployed one (REQ-4.2-7, ADR-013 item 5); its
+score is the nested-CV estimate above, never a score on its own training data.
 """
 
 from dataclasses import dataclass
@@ -15,9 +20,10 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score
 
+from copra_grading.augmentation import ORIGINAL, class_multipliers, select_training_rows
 from copra_grading.features.table import feature_columns
 from copra_grading.folds import make_folds
-from copra_grading.models import fit_model
+from copra_grading.models import FittedModel, fit_model
 from copra_grading.models.tuning import tune_model
 
 ENSEMBLE_CANDIDATES = ("random_forest", "xgboost", "lightgbm")
@@ -73,3 +79,33 @@ def select_model(fold_scores: dict[str, list[float]]) -> str:
     if not candidates:
         raise ValueError("no ensemble model in fold_scores - Logistic Regression is never selectable")
     return max(candidates, key=candidates.get)
+
+
+def full_training_rows(table: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """Every original photo plus augmented copies, with multipliers from the
+    whole dataset's class counts - the same rule a training fold uses (ADR-002)."""
+    label = config["splitting"]["label_column"]
+    aug = config["augmentation"]
+    originals = table[table["augment"] == ORIGINAL]
+    counts = {str(c): int(n) for c, n in originals[label].value_counts().items()}
+    multipliers = class_multipliers(counts, aug["base_copies"], aug["max_multiplier"])
+    return select_training_rows(table, originals["id"], multipliers,
+                                seed=config["splitting"]["random_state"])
+
+
+def fit_final_model(
+    table: pd.DataFrame, config: dict, model_name: str, n_trials: int
+) -> tuple[FittedModel, dict]:
+    """Re-tune `model_name` on the full dataset with a grouped
+    n_splits-fold split (splitting.n_splits, 5), then train it on all
+    photos plus augmented copies. Return (model, best params)."""
+    if model_name not in ENSEMBLE_CANDIDATES:
+        raise ValueError(f"{model_name} is not deployable - only {ENSEMBLE_CANDIDATES}")
+    label = config["splitting"]["label_column"]
+    seed = config["tuning"]["random_state"]
+    study = tune_model(model_name, table, config, n_trials, seed,
+                       n_splits=config["splitting"]["n_splits"])
+    train = full_training_rows(table, config)
+    model = fit_model(model_name, study.best_params, train[feature_columns(table)],
+                      train[label], seed)
+    return model, study.best_params

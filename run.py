@@ -4,7 +4,7 @@ Usage:
   .\\run                      menu: pick a process by number
   .\\run train                start one process directly
   .\\run train --n-trials 3   extra arguments go to that process's script
-  .\\run all                  features -> folds -> train, stops at the first failure
+  .\\run all                  features -> folds -> train -> deploy, stops at the first failure
 
 Without run.bat:  uv run python run.py [process] [args...]
 """
@@ -24,8 +24,12 @@ PROCESSES = {
     "folds": ("prepare_folds.py", "Outlier removal + folds (Step 4) -> features_clean.csv, folds.csv"),
     "train": ("train_models.py", "Model training, selection, metrics (Steps 5-7), ~80 min -> data/processed/results/"),
     "quick-train": ("train_models.py", "Smoke test of training: 3 trials per model, a few minutes"),
+    "deploy": ("fit_final_model.py", "Re-tune + refit the selected model on all data, save it, TreeSHAP -> models/selected/"),
+    "lighting": ("lighting_check.py", "Background-only check: can the paper alone predict the grade? -> results/lighting_check.json"),
+    "ablation": ("ablation.py", "Feature-family ablation: GLCM / color / edge alone vs combined -> results/ablation.json"),
 }
-PIPELINE = ("features", "folds", "train")
+PIPELINE = ("features", "folds", "train", "deploy")
+TRIAL_PROCESSES = ("train", "deploy")  # processes that take --n-trials
 QUICK_TRAIN_ARGS = ["--n-trials", "3"]
 
 
@@ -44,7 +48,7 @@ def run_process(name: str, extra: list[str]) -> int:
 
 def run_all(extra: list[str]) -> int:
     for name in PIPELINE:
-        code = run_process(name, extra if name == "train" else [])
+        code = run_process(name, extra if name in TRIAL_PROCESSES else [])
         if code != 0:
             print(f"stopped: {name} failed, later steps skipped")
             return code
@@ -56,7 +60,7 @@ def menu() -> str | None:
     choices = [*PROCESSES, "all"]
     print("Copra pipeline - choose a process:\n")
     for i, name in enumerate(choices, 1):
-        desc = PROCESSES[name][1] if name in PROCESSES else "Run features -> folds -> train in order"
+        desc = PROCESSES[name][1] if name in PROCESSES else "Run features -> folds -> train -> deploy in order"
         print(f"  {i}. {name:<12} {desc}")
     print("  q. quit\n")
     while True:

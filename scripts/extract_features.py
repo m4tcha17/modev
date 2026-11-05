@@ -16,9 +16,10 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pandas as pd
 import yaml
 
-from copra_grading.dataset import assert_clean, load_dataset, load_image
+from copra_grading.dataset import assert_clean, balance_cubes, drop_excluded, load_dataset, load_image
 from copra_grading.augmentation import ORIGINAL, TRANSFORMS
 from copra_grading.features.table import build_feature_table, feature_columns, originals
 from copra_grading.preprocessing.pipeline import compute_mask
@@ -61,6 +62,16 @@ def main() -> None:
 
     df = load_dataset(csv_path)
     assert_clean(df)
+    exclusions = config["data"].get("mask_exclusions")
+    df, excluded = drop_excluded(df, Path(exclusions) if exclusions else None)
+    if excluded:
+        print(f"{len(excluded)} photos excluded for bad masks ({exclusions})")
+    df, trimmed = balance_cubes(df, config["data"]["min_grade_ratio"], config["data"]["balance_seed"])
+    for cls, batches in trimmed.items():
+        print(f"grade {cls}: {len(batches)} cubes dropped to meet min_grade_ratio "
+              f"{config['data']['min_grade_ratio']}")
+    pd.DataFrame([{"batch_id": b, "copra_class": c} for c, bs in trimmed.items() for b in bs],
+                 columns=["batch_id", "copra_class"]).to_csv(args.out / "balance_dropped.csv", index=False)
     print(f"{len(df)} photos, {df['batch_id'].nunique()} batches, classes: "
           f"{df['copra_class'].value_counts().sort_index().to_dict()}")
 

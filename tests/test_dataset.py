@@ -136,3 +136,58 @@ def test_class_metadata_covers_every_class():
     assert set(CLASS_DESCRIPTIONS) == set(VALID_CLASSES)
     assert sorted(MOISTURE_ORDER) == sorted(VALID_CLASSES)
     assert MOISTURE_ORDER[0] == "F" and MOISTURE_ORDER[-1] == "E"
+
+
+def test_drop_excluded_removes_listed_photos(tmp_path):
+    from copra_grading.dataset import drop_excluded
+
+    df = _frame(_batch("b1", "A"), _batch("b2", "B"))
+    path = tmp_path / "excl.csv"
+    path.write_text("id,reason\nb1-2,shadow patch\n")
+    kept, dropped = drop_excluded(df, path)
+    assert dropped == ["b1-2"]
+    assert "b1-2" not in set(kept["id"]) and len(kept) == 7
+
+
+def test_drop_excluded_missing_or_empty_file_drops_nothing(tmp_path):
+    from copra_grading.dataset import drop_excluded
+
+    df = _frame(_batch("b1", "A"))
+    assert drop_excluded(df, tmp_path / "none.csv")[1] == []
+    empty = tmp_path / "empty.csv"
+    empty.write_text("id,reason\n")
+    assert len(drop_excluded(df, empty)[0]) == 4
+
+
+def test_drop_excluded_rejects_unknown_ids(tmp_path):
+    from copra_grading.dataset import drop_excluded
+
+    path = tmp_path / "excl.csv"
+    path.write_text("id,reason\nnope,typo\n")
+    with pytest.raises(ValueError, match="nope"):
+        drop_excluded(_frame(_batch("b1", "A")), path)
+
+
+def _cubes(cls, n):
+    return [_batch(f"{cls}{i}", cls) for i in range(n)]
+
+
+def test_balance_cubes_trims_over_cap_grades_by_whole_cube():
+    from copra_grading.dataset import balance_cubes
+
+    df = _frame(*_cubes("A", 15), *_cubes("D", 9), *_cubes("F", 10))
+    kept, dropped = balance_cubes(df, 0.9, seed=42)
+    counts = kept.groupby("copra_class")["batch_id"].nunique().to_dict()
+    assert counts == {"A": 10, "D": 9, "F": 10}  # cap = floor(9 / 0.9) = 10
+    assert set(dropped) == {"A"} and len(dropped["A"]) == 5
+    assert (kept.groupby("batch_id").size() == 4).all()
+
+
+def test_balance_cubes_is_seeded_and_noop_when_balanced():
+    from copra_grading.dataset import balance_cubes
+
+    df = _frame(*_cubes("A", 15), *_cubes("D", 9))
+    assert balance_cubes(df, 0.9, seed=1)[1] == balance_cubes(df, 0.9, seed=1)[1]
+    even = _frame(*_cubes("A", 10), *_cubes("D", 9))
+    kept, dropped = balance_cubes(even, 0.9, seed=1)
+    assert dropped == {} and len(kept) == len(even)

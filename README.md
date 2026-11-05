@@ -19,7 +19,10 @@ Current export (`dataset/copra-dataset.csv`, dated 2026-10-14): 1000 photos in 2
 .\run folds                 # -> features_clean.csv + folds.csv (outliers, folds)
 .\run train                 # -> data/processed/results/ (nested CV, selection, metrics), ~80 min
 .\run quick-train           # training smoke test, 3 trials per model
-.\run all                   # features -> folds -> train, stops at the first failure
+.\run deploy                # re-tune + refit selected model on all data -> models/selected/ + shap_by_family.json
+.\run lighting              # background-only lighting check -> results/lighting_check.json
+.\run ablation              # feature-family ablation -> results/ablation.json
+.\run all                   # features -> folds -> train -> deploy, stops at the first failure
 .\run train --n-trials 10   # extra arguments go to that process's script
 ```
 
@@ -54,7 +57,7 @@ src/copra_grading/
 
 app/streamlit_app.py   # Step 9: one photo in, one class out
 configs/default.yaml   # all tunable parameters in one place
-scripts/               # run the pipeline: mask_photos, extract_features, prepare_folds, train_models
+scripts/               # run the pipeline: mask_photos, extract_features, prepare_folds, train_models, fit_final_model, lighting_check, ablation
 tests/                 # mirrors src/ layout
 docs/                  # architecture doc + ADRs
 ```
@@ -81,5 +84,5 @@ One row per photo. Each physical sample is photographed from 4 sides; those 4 ro
 9. **Deploy** — selected model in a Streamlit app: upload one photo, get a class A–F, optional per-photo SHAP.
 
 ```bash
-uv run streamlit run app/streamlit_app.py   # once implemented
+uv run streamlit run app/streamlit_app.py   # needs models/selected/ from the deploy step
 ```

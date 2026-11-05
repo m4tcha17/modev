@@ -24,11 +24,12 @@ def test_pipeline_runs_in_order_and_stops_at_first_failure(monkeypatch):
     assert calls == [("features", []), ("folds", [])]
 
 
-def test_extra_args_go_to_train_only(monkeypatch):
+def test_extra_args_go_to_train_and_deploy_only(monkeypatch):
     calls = []
     monkeypatch.setattr(run, "run_process", lambda name, extra: calls.append((name, extra)) or 0)
     assert run.run_all(["--n-trials", "3"]) == 0
-    assert calls == [("features", []), ("folds", []), ("train", ["--n-trials", "3"])]
+    assert calls == [("features", []), ("folds", []), ("train", ["--n-trials", "3"]),
+                     ("deploy", ["--n-trials", "3"])]
 
 
 def test_unknown_process_is_rejected(capsys):
@@ -37,7 +38,7 @@ def test_unknown_process_is_rejected(capsys):
 
 
 def test_menu_accepts_number_and_name(monkeypatch):
-    answers = iter(["9", "4"])
+    answers = iter(["99", "4"])
     monkeypatch.setattr("builtins.input", lambda _: next(answers))
     assert run.menu() == "train"
     monkeypatch.setattr("builtins.input", lambda _: "folds")
